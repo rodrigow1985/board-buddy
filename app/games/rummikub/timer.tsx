@@ -1,13 +1,340 @@
-import { View, Text, StyleSheet } from 'react-native';
-import { Colors, Fonts, FontSizes, FontWeights } from '@src/constants/tokens';
+import { useEffect, useRef, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Animated,
+  Dimensions,
+  Platform,
+  StatusBar as RNStatusBar,
+} from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTimerStore, TimerStatus } from '@src/store/timerStore';
+import { useCountdown } from '@src/hooks/useCountdown';
+import { useBackgroundTimer } from '@src/hooks/useBackgroundTimer';
+import * as Haptics from 'expo-haptics';
+import { useHaptics } from '@src/hooks/useHaptics';
+import { calcProgress, isWarnState } from '@src/utils/time';
+import { nextPlayerIndex } from '@src/utils/players';
+import { Colors, FontWeights, FontSizes, Spacing, Animations as Anim } from '@src/constants/tokens';
+import { TopProgressBar } from '@src/components/timer/TopProgressBar';
+import { TimerDisplay } from '@src/components/timer/TimerDisplay';
+import { PlayerChip } from '@src/components/timer/PlayerChip';
+import { NextUpRow } from '@src/components/timer/NextUpRow';
+import { TimerControls } from '@src/components/timer/TimerControls';
+import { VoiceHint } from '@src/components/timer/VoiceHint';
+import { VoiceStatusChip } from '@src/components/timer/VoiceStatusChip';
 
-// Pantalla del temporizador — placeholder hasta Fase 3
+// Mapa de status del timer a índice de color de fondo
+function bgIndexForStatus(status: TimerStatus, isWarn: boolean): number {
+  if (status === 'paused') return 3;
+  if (status === 'timeout') return 2;
+  if (status === 'running' || status === 'transitioning') {
+    return isWarn ? 1 : 0;
+  }
+  return 0;
+}
+
+const BG_COLORS = [Colors.calm, Colors.warn, Colors.alert, Colors.paused];
+const SCREEN_WIDTH = Dimensions.get('window').width;
+
 export default function TimerScreen() {
+  const insets = useSafeAreaInsets();
+  const haptics = useHaptics();
+
+  const status = useTimerStore((s) => s.status);
+  const players = useTimerStore((s) => s.players);
+  const currentPlayerIndex = useTimerStore((s) => s.currentPlayerIndex);
+  const timeRemainingMs = useTimerStore((s) => s.timeRemainingMs);
+  const turnDurationMs = useTimerStore((s) => s.turnDurationMs);
+  const { pause, resume, passTurn, restartTurn, endTransition, start, initGame } = useTimerStore((s) => ({
+    pause: s.pause,
+    resume: s.resume,
+    passTurn: s.passTurn,
+    restartTurn: s.restartTurn,
+    endTransition: s.endTransition,
+    start: s.start,
+    initGame: s.initGame,
+  }));
+
+  // Activar hooks del timer
+  useCountdown();
+  useBackgroundTimer();
+
+  // ── Inicialización rápida con datos de prueba mientras no hay setup screen ──
+  useEffect(() => {
+    if (status === 'idle' && players.length === 0) {
+      const { createPlayer } = require('@src/utils/players');
+      initGame(
+        [
+          createPlayer(0, 'Rodrigo'),
+          createPlayer(1, 'Ana'),
+          createPlayer(2, 'Carlos'),
+        ],
+        120_000,
+      );
+    }
+  }, [status, players.length, initGame]);
+
+  useEffect(() => {
+    if (status === 'idle' && players.length > 0) {
+      start();
+    }
+  }, [status, players.length, start]);
+
+  // ── Animación del color de fondo ──────────────────────────────────────────
+  const isWarn = isWarnState(timeRemainingMs, turnDurationMs);
+  const bgAnim = useRef(new Animated.Value(bgIndexForStatus(status, isWarn))).current;
+  const prevBgIndex = useRef(bgIndexForStatus(status, isWarn));
+
+  useEffect(() => {
+    const targetIndex = bgIndexForStatus(status, isWarn);
+    if (targetIndex !== prevBgIndex.current) {
+      prevBgIndex.current = targetIndex;
+      Animated.timing(bgAnim, {
+        toValue: targetIndex,
+        duration: Anim.stateTransition,
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [status, isWarn, bgAnim]);
+
+  const backgroundColor = bgAnim.interpolate({
+    inputRange: [0, 1, 2, 3],
+    outputRange: BG_COLORS,
+  });
+
+  // ── Flash rojo en timeout ──────────────────────────────────────────────────
+  const flashAnim = useRef(new Animated.Value(0)).current;
+  const prevStatus = useRef(status);
+
+  useEffect(() => {
+    if (prevStatus.current !== 'timeout' && status === 'timeout') {
+      haptics.notification(Haptics.NotificationFeedbackType.Error);
+      Animated.sequence([
+        Animated.timing(flashAnim, {
+          toValue: 1,
+          duration: Anim.timeoutFlash / 2,
+          useNativeDriver: false,
+        }),
+        Animated.timing(flashAnim, {
+          toValue: 0,
+          duration: Anim.timeoutFlash / 2,
+          useNativeDriver: false,
+        }),
+      ]).start();
+    }
+    prevStatus.current = status;
+  }, [status, flashAnim, haptics]);
+
+  const flashOverlay = flashAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['rgba(178,58,31,0)', 'rgba(178,58,31,0.55)'],
+  });
+
+  // ── Animación de transición de turno ──────────────────────────────────────
+  const outgoingTranslateX = useRef(new Animated.Value(0)).current;
+  const outgoingOpacity = useRef(new Animated.Value(0)).current;
+  const incomingTranslateX = useRef(new Animated.Value(SCREEN_WIDTH * 0.5)).current;
+  const incomingOpacity = useRef(new Animated.Value(0)).current;
+
+  // Guardamos el índice del jugador saliente para renderizarlo durante la transición
+  const outgoingPlayerIndexRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (status === 'transitioning') {
+      // El índice actual en el store ya es el ENTRANTE (passTurn lo avanzó)
+      // El saliente es el anterior al actual
+      const outgoing = (currentPlayerIndex - 1 + players.length) % players.length;
+      outgoingPlayerIndexRef.current = outgoing;
+
+      // Reset animaciones
+      outgoingTranslateX.setValue(0);
+      outgoingOpacity.setValue(1);
+      incomingTranslateX.setValue(SCREEN_WIDTH * 0.4);
+      incomingOpacity.setValue(0);
+
+      Animated.parallel([
+        Animated.timing(outgoingTranslateX, {
+          toValue: -SCREEN_WIDTH * 0.58,
+          duration: Anim.turnTransition,
+          useNativeDriver: true,
+        }),
+        Animated.timing(outgoingOpacity, {
+          toValue: 0.45,
+          duration: Anim.turnTransition,
+          useNativeDriver: true,
+        }),
+        Animated.timing(incomingTranslateX, {
+          toValue: SCREEN_WIDTH * 0.08,
+          duration: Anim.turnTransition,
+          useNativeDriver: true,
+        }),
+        Animated.timing(incomingOpacity, {
+          toValue: 1,
+          duration: Anim.turnTransition,
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (finished) {
+          endTransition();
+          // Reset para el próximo ciclo
+          outgoingPlayerIndexRef.current = null;
+          outgoingTranslateX.setValue(0);
+          outgoingOpacity.setValue(0);
+          incomingTranslateX.setValue(0);
+          incomingOpacity.setValue(1);
+        }
+      });
+    }
+  }, [
+    status,
+    currentPlayerIndex,
+    players.length,
+    outgoingTranslateX,
+    outgoingOpacity,
+    incomingTranslateX,
+    incomingOpacity,
+    endTransition,
+  ]);
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+  const handlePauseResume = useCallback(() => {
+    if (status === 'paused') {
+      haptics.impact(Haptics.ImpactFeedbackStyle.Light);
+      resume();
+    } else if (status === 'running') {
+      haptics.impact(Haptics.ImpactFeedbackStyle.Light);
+      pause();
+    }
+  }, [status, pause, resume, haptics]);
+
+  const handlePassTurn = useCallback(() => {
+    if (status === 'running' || status === 'paused') {
+      haptics.impact(Haptics.ImpactFeedbackStyle.Medium);
+      passTurn('button');
+    } else if (status === 'timeout') {
+      haptics.impact(Haptics.ImpactFeedbackStyle.Medium);
+      endTransition();
+    }
+  }, [status, passTurn, endTransition, haptics]);
+
+  const handleRestart = useCallback(() => {
+    if (status === 'running' || status === 'paused') {
+      haptics.impact(Haptics.ImpactFeedbackStyle.Light);
+      restartTurn();
+    }
+  }, [status, restartTurn, haptics]);
+
+  // ── Datos para renderizar ─────────────────────────────────────────────────
+  const currentPlayer = players[currentPlayerIndex];
+  const outgoingPlayer =
+    outgoingPlayerIndexRef.current !== null
+      ? players[outgoingPlayerIndexRef.current]
+      : null;
+  const nextIndex = nextPlayerIndex(currentPlayerIndex, players.length);
+  const nextPlayer = players.length > 1 ? players[nextIndex] : null;
+  const progress = calcProgress(timeRemainingMs, turnDurationMs);
+  const isTransitioning = status === 'transitioning';
+  const isPaused = status === 'paused';
+  const isTimeout = status === 'timeout';
+
+  // Chip de voz: en esta fase sin detección real, solo mostramos estado UI
+  const voiceChipState = isTransitioning
+    ? 'transitioning'
+    : isPaused
+    ? 'paused'
+    : 'listening';
+
+  if (!currentPlayer) return null;
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.time}>2:00</Text>
-      <Text style={styles.subtitle}>Timer — Fase 3</Text>
-    </View>
+    <Animated.View style={[styles.container, { backgroundColor }]}>
+      <StatusBar style="light" />
+
+      {/* Overlay de flash en timeout */}
+      <Animated.View
+        style={[StyleSheet.absoluteFill, { backgroundColor: flashOverlay }]}
+        pointerEvents="none"
+      />
+
+      {/* Barra de progreso horizontal (top) */}
+      <TopProgressBar progress={progress} isWarn={isWarn} />
+
+      {/* Fila superior: chip de voz */}
+      <View style={[styles.topRow, { paddingTop: insets.top + 16 }]}>
+        <VoiceStatusChip state={voiceChipState} voiceEnabled={false} />
+        {isPaused && (
+          <View style={styles.pauseBanner}>
+            <Text style={styles.pauseLabel}>PARTIDA EN PAUSA</Text>
+          </View>
+        )}
+        {isTimeout && (
+          <View style={styles.timeoutBanner}>
+            <Text style={styles.timeoutLabel}>TIEMPO AGOTADO</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Centro: jugador actual + timer */}
+      <View style={styles.center}>
+        {isTransitioning && outgoingPlayer ? (
+          // Animación de transición de turno
+          <>
+            <Animated.View
+              style={[
+                styles.playerSlot,
+                {
+                  transform: [{ translateX: outgoingTranslateX }],
+                  opacity: outgoingOpacity,
+                  position: 'absolute',
+                },
+              ]}
+            >
+              <PlayerChip name={outgoingPlayer.name} />
+              <TimerDisplay timeMs={0} paused={false} />
+            </Animated.View>
+            <Animated.View
+              style={[
+                styles.playerSlot,
+                {
+                  transform: [{ translateX: incomingTranslateX }],
+                  opacity: incomingOpacity,
+                },
+              ]}
+            >
+              <PlayerChip name={currentPlayer.name} />
+              <TimerDisplay timeMs={turnDurationMs} paused={false} />
+            </Animated.View>
+          </>
+        ) : (
+          <View style={styles.playerSlot}>
+            <PlayerChip name={currentPlayer.name} />
+            <TimerDisplay timeMs={timeRemainingMs} paused={isPaused} />
+          </View>
+        )}
+      </View>
+
+      {/* Fila "Sigue": siguiente jugador */}
+      {nextPlayer && !isTransitioning && (
+        <View style={styles.nextRow}>
+          <NextUpRow player={nextPlayer} />
+        </View>
+      )}
+
+      {/* Botones de control */}
+      <View style={[styles.controls, { paddingBottom: insets.bottom + Spacing.screenV }]}>
+        <TimerControls
+          status={status}
+          onPauseResume={handlePauseResume}
+          onRestart={handleRestart}
+          onPassTurn={handlePassTurn}
+          disabled={isTransitioning}
+        />
+        <VoiceHint visible={false} />
+      </View>
+    </Animated.View>
   );
 }
 
@@ -15,19 +342,54 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.calm,
+  },
+  topRow: {
+    paddingHorizontal: Spacing.screenH,
+    alignItems: 'center',
+    minHeight: 48,
+  },
+  pauseBanner: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 100,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  pauseLabel: {
+    fontFamily: FontWeights.sans.semibold,
+    fontSize: FontSizes.micro,
+    color: '#FFFFFF',
+    letterSpacing: 1.5,
+  },
+  timeoutBanner: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 100,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  timeoutLabel: {
+    fontFamily: FontWeights.sans.semibold,
+    fontSize: FontSizes.micro,
+    color: '#FFFFFF',
+    letterSpacing: 1.5,
+  },
+  center: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
-  time: {
-    fontFamily: FontWeights.display.regular,
-    fontSize: FontSizes.timerXL,
-    color: '#FFFFFF',
-    letterSpacing: -6,
+  playerSlot: {
+    alignItems: 'center',
+    gap: Spacing.md,
   },
-  subtitle: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: 'rgba(255,255,255,0.65)',
-    marginTop: 16,
+  nextRow: {
+    alignItems: 'center',
+    paddingHorizontal: Spacing.screenH,
+    paddingBottom: Spacing.lg,
+  },
+  controls: {
+    alignItems: 'center',
+    gap: Spacing.lg,
+    paddingTop: Spacing.xl,
   },
 });
