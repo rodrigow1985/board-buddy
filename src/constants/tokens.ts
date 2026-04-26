@@ -113,6 +113,14 @@ export const Shadows = {
   cardAndroid: {
     elevation: 2,
   },
+  // Combinado (cross-platform — cada plataforma ignora las propiedades que no soporta)
+  card: {
+    shadowColor: '#1F1A16',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.04,
+    shadowRadius: 18,
+    elevation: 2,
+  },
   // Toggle thumb
   toggleThumbIOS: {
     shadowColor: '#000',

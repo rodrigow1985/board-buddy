@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
     borderRadius: Radii.lg,
     padding: Spacing.lg,
     gap: Spacing.md,
-    ...Shadows.cardIOS,
+    ...Shadows.card,
   },
   message: {
     fontFamily: FontWeights.sans.regular,

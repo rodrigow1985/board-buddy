@@ -2,13 +2,16 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import {
   View,
   Text,
+  Pressable,
   StyleSheet,
   Animated,
   Dimensions,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTimerStore, TimerStatus } from '@src/store/timerStore';
+import { useSettingsStore } from '@src/store/settingsStore';
 import { useCountdown } from '@src/hooks/useCountdown';
 import { useBackgroundTimer } from '@src/hooks/useBackgroundTimer';
 import * as Haptics from 'expo-haptics';
@@ -16,7 +19,7 @@ import { useHaptics } from '@src/hooks/useHaptics';
 import { useVoiceDetection } from '@src/hooks/useVoiceDetection';
 import { calcProgress, isWarnState } from '@src/utils/time';
 import { nextPlayerIndex } from '@src/utils/players';
-import { Colors, FontWeights, FontSizes, Spacing, Animations as Anim } from '@src/constants/tokens';
+import { Colors, FontWeights, FontSizes, Spacing, Radii, Animations as Anim } from '@src/constants/tokens';
 import { TopProgressBar } from '@src/components/timer/TopProgressBar';
 import { TimerDisplay } from '@src/components/timer/TimerDisplay';
 import { PlayerChip } from '@src/components/timer/PlayerChip';
@@ -40,11 +43,13 @@ const BG_COLORS = [Colors.calm, Colors.warn, Colors.alert, Colors.paused];
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 export default function TimerScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const haptics = useHaptics();
 
-  // Voz habilitada (en Fase 5 vendrá del settingsStore)
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  // Voz habilitada desde settingsStore
+  const voiceEnabledSetting = useSettingsStore((s) => s.voice.enabled);
+  const [voiceEnabled, setVoiceEnabled] = useState(voiceEnabledSetting);
   const [showPermissionSnackbar, setShowPermissionSnackbar] = useState(false);
 
   const { state: voiceState, requestPermission } = useVoiceDetection({
@@ -346,7 +351,16 @@ export default function TimerScreen() {
           onPassTurn={handlePassTurn}
           disabled={isTransitioning}
         />
-        <VoiceHint visible={voiceEnabled && voiceState === 'listening'} />
+        <View style={styles.bottomRow}>
+          <VoiceHint visible={voiceEnabled && voiceState === 'listening'} />
+          <Pressable
+            style={({ pressed }) => [styles.endBtn, pressed && styles.endBtnPressed]}
+            onPress={() => router.push('/games/rummikub/summary')}
+            accessibilityLabel="Fin de partida"
+          >
+            <Text style={styles.endBtnLabel}>Fin de partida</Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* Snackbar de permisos denegados */}
@@ -414,5 +428,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.lg,
     paddingTop: Spacing.xl,
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: Spacing.screenH,
+    minHeight: 32,
+  },
+  endBtn: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: Radii.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  endBtnPressed: {
+    backgroundColor: 'rgba(255,255,255,0.10)',
+  },
+  endBtnLabel: {
+    fontFamily: FontWeights.sans.medium,
+    fontSize: FontSizes.captionS,
+    color: 'rgba(255,255,255,0.70)',
   },
 });
