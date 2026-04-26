@@ -89,7 +89,7 @@ function createActions(set: (fn: (s: TimerState) => Partial<TimerState>) => void
 
     passTurn: (reason: PassReason) =>
       set((s) => {
-        if (s.status !== 'running' && s.status !== 'paused') return {};
+        if (s.status !== 'running' && s.status !== 'paused' && s.status !== 'timeout') return {};
 
         const durationMs = s.turnDurationMs - s.timeRemainingMs;
         const record: TurnRecord = {

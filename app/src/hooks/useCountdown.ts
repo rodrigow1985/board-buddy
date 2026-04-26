@@ -15,18 +15,25 @@ export function useCountdown() {
   const onTimeout = useTimerStore((s) => s.onTimeout);
   const timeRemainingMs = useTimerStore((s) => s.timeRemainingMs);
 
-  const lastTickRef = useRef<number>(Date.now());
+  const lastTickRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (status !== 'running') return;
 
-    lastTickRef.current = Date.now();
+    // Inicializamos lastTickRef al primer tick real del intervalo,
+    // no al montar el efecto, para evitar que tiempo de setup
+    // se cuente como tiempo de juego (causa BUG-01: segundos rápidos).
+    lastTickRef.current = null;
 
     const interval = setInterval(() => {
       const now = Date.now();
+      if (lastTickRef.current === null) {
+        // Primer tick: solo establecemos la marca de tiempo sin descontar
+        lastTickRef.current = now;
+        return;
+      }
       const elapsed = now - lastTickRef.current;
       lastTickRef.current = now;
-
       tick(elapsed);
     }, TICK_INTERVAL_MS);
 

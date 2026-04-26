@@ -243,7 +243,7 @@ export default function TimerScreen() {
       passTurn('button');
     } else if (status === 'timeout') {
       haptics.impact(Haptics.ImpactFeedbackStyle.Medium);
-      endTransition();
+      passTurn('button');
     }
   }, [status, passTurn, endTransition, haptics]);
 

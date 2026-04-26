@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useTimerStore } from '@src/store/timerStore';
 
 export type VoiceDetectionState = 'idle' | 'requesting' | 'listening' | 'paused' | 'error' | 'unavailable';
@@ -54,12 +54,16 @@ export function useVoiceDetection({
   const status = useTimerStore((s) => s.status);
   const passTurn = useTimerStore((s) => s.passTurn);
 
-  const stateRef = useRef<VoiceDetectionState>(SpeechModule ? 'idle' : 'unavailable');
+  const [voiceState, setVoiceState] = useState<VoiceDetectionState>(
+    SpeechModule ? 'idle' : 'unavailable'
+  );
   const permissionRef = useRef<boolean | null>(null);
   const isRunningRef = useRef(false);
   const lastTriggerRef = useRef<number>(0);
 
-  const shouldListen = enabled && permissionRef.current === true && status === 'running';
+  // BUG-04: incluir 'timeout' para que la voz siga activa cuando el tiempo se agota
+  const shouldListen = enabled && permissionRef.current === true
+    && (status === 'running' || status === 'timeout');
 
   // ── Iniciar / detener reconocimiento ──────────────────────────────────
   const startListening = useCallback(() => {
@@ -67,9 +71,9 @@ export function useVoiceDetection({
     try {
       SpeechModule.start(RECOGNITION_OPTIONS);
       isRunningRef.current = true;
-      stateRef.current = 'listening';
+      setVoiceState('listening');
     } catch {
-      stateRef.current = 'error';
+      setVoiceState('error');
       isRunningRef.current = false;
     }
   }, []);
@@ -82,7 +86,7 @@ export function useVoiceDetection({
       // ignorar
     }
     isRunningRef.current = false;
-    stateRef.current = 'paused';
+    setVoiceState('paused');
   }, []);
 
   // ── Suscripción a eventos nativos ──────────────────────────────────────
@@ -94,7 +98,7 @@ export function useVoiceDetection({
     const subs = [
       SpeechModule.addListener('start', () => {
         isRunningRef.current = true;
-        stateRef.current = 'listening';
+        setVoiceState('listening');
       }),
 
       SpeechModule.addListener('end', () => {
@@ -115,7 +119,7 @@ export function useVoiceDetection({
             if (shouldListen && !isRunningRef.current) startListening();
           }, 500);
         } else {
-          stateRef.current = 'error';
+          setVoiceState('error');
         }
       }),
 
@@ -162,24 +166,24 @@ export function useVoiceDetection({
       permissionRef.current = false;
       return false;
     }
-    stateRef.current = 'requesting';
+    setVoiceState('requesting');
     try {
       const response = await SpeechModule.requestPermissionsAsync();
       permissionRef.current = response.granted;
       if (!response.granted) {
-        stateRef.current = 'idle';
+        setVoiceState('idle');
         onPermissionDenied?.();
       }
       return response.granted;
     } catch {
-      stateRef.current = 'error';
+      setVoiceState('error');
       permissionRef.current = false;
       return false;
     }
   }, [onPermissionDenied]);
 
   return {
-    state: stateRef.current,
+    state: voiceState,
     permissionGranted: permissionRef.current,
     requestPermission,
   };
