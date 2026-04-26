@@ -3,7 +3,7 @@
 **Issue:** rodrigow1985/board-buddy#22
 **Fecha reporte:** 2026-04-26
 **Severidad:** Alta
-**Estado:** Abierto
+**Estado:** Cerrado ✓
 
 ---
 
@@ -36,7 +36,7 @@ Dos problemas combinados en `useVoiceDetection.ts`:
 
 #### Problema 1 — Stale closure en los event listeners nativos
 
-`shouldListen` está en el array de deps del effect de suscripciones (línea 147):
+`shouldListen` estaba en el array de deps del effect de suscripciones (línea 147):
 
 ```ts
 }, [enabled, shouldListen, triggerWord, startListening, passTurn, onTrigger]);
@@ -54,10 +54,6 @@ y los re-registra. Durante ese ciclo:
 Esto explica el flicker. Además, reiniciar el reconocedor en cada cambio de turno
 rompe el contexto de escucha de Android.
 
-Los valores `shouldListen` dentro de los closures de `end`, `error` y `result`
-quedan obsoletos mientras los listeners están activos, aunque el effect los re-registra.
-La solución es usar una ref sincronizada en lugar de poner `shouldListen` en las deps.
-
 #### Problema 2 — El handler de `end` reactiva tras errores fatales
 
 Cuando Android lanza un error no-recuperable (ej. `service-not-available`):
@@ -66,9 +62,6 @@ Cuando Android lanza un error no-recuperable (ej. `service-not-available`):
 
 Ciclo: error fatal → end → restart → error fatal → ...
 
-El handler de `end` no sabe si el cierre de sesión fue por error fatal,
-por lo que reactiva el reconocedor en un estado no válido.
-
 ### Archivos afectados
 - `app/src/hooks/useVoiceDetection.ts` — suscripciones con stale closure y lógica de reinicio tras error fatal
 
@@ -76,14 +69,6 @@ por lo que reactiva el reconocedor en un estado no válido.
 
 ## Plan de solución
 
-1. **Reemplazar `shouldListen` en closures por `shouldListenRef.current`**: agregar
-   `const shouldListenRef = useRef(shouldListen)` y un effect que lo sincronice.
-   Los event handlers usan `shouldListenRef.current` para leer el valor más reciente
-   sin estar en las deps del effect de suscripciones.
-
-2. **Eliminar `shouldListen` de las deps del effect de suscripciones**: los listeners
-   nativos se registran una sola vez (por `enabled`) y no se re-crean en cada transición.
-
-3. **Agregar `fatalErrorRef`**: booleano que el handler de `error` activa cuando el error
-   no es recuperable. El handler de `end` lo consulta y, si está activo, no reinicia
-   (y lo resetea para no bloquear intentos futuros manuales).
+1. **Reemplazar `shouldListen` en closures por `shouldListenRef.current`**
+2. **Eliminar `shouldListen` de las deps del effect de suscripciones**
+3. **Agregar `fatalErrorRef`** para que `end` no reactive tras errores no-recuperables
