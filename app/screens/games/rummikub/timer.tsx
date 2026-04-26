@@ -17,6 +17,7 @@ import { useBackgroundTimer } from '@src/hooks/useBackgroundTimer';
 import * as Haptics from 'expo-haptics';
 import { useHaptics } from '@src/hooks/useHaptics';
 import { useVoiceDetection } from '@src/hooks/useVoiceDetection';
+import { useAudio } from '@src/hooks/useAudio';
 import { calcProgress, isWarnState } from '@src/utils/time';
 import { nextPlayerIndex } from '@src/utils/players';
 import { Colors, FontWeights, FontSizes, Spacing, Radii, Animations as Anim } from '@src/constants/tokens';
@@ -56,10 +57,14 @@ export default function TimerScreen() {
     setShowPermissionSnackbar(true);
   }, []);
 
+  // playPass se inicializa después; usamos ref para evitar dependencia circular
+  const playPassRef = useRef<(() => void) | null>(null);
+
   const { state: voiceState, requestPermission } = useVoiceDetection({
     enabled: voiceEnabled,
     triggerWord: 'paso',
     onPermissionDenied: handlePermissionDenied,
+    onTrigger: useCallback(() => { playPassRef.current?.(); }, []),
   });
 
   // Estado reactivo del store (primitivos — referencia estable)
@@ -77,6 +82,10 @@ export default function TimerScreen() {
   // Activar hooks del timer
   useCountdown();
   useBackgroundTimer();
+  const { playPass } = useAudio();
+
+  // Conectar playPass al ref para que onTrigger de voz lo use
+  useEffect(() => { playPassRef.current = playPass; }, [playPass]);
 
   // ── Inicialización rápida con datos de prueba mientras no hay setup screen ──
   useEffect(() => {
@@ -238,14 +247,12 @@ export default function TimerScreen() {
   }, [status, pause, resume, haptics]);
 
   const handlePassTurn = useCallback(() => {
-    if (status === 'running' || status === 'paused') {
+    if (status === 'running' || status === 'paused' || status === 'timeout') {
       haptics.impact(Haptics.ImpactFeedbackStyle.Medium);
-      passTurn('button');
-    } else if (status === 'timeout') {
-      haptics.impact(Haptics.ImpactFeedbackStyle.Medium);
+      playPass();
       passTurn('button');
     }
-  }, [status, passTurn, endTransition, haptics]);
+  }, [status, passTurn, playPass, haptics]);
 
   const handleRestart = useCallback(() => {
     if (status === 'running' || status === 'paused') {

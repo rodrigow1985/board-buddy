@@ -7,6 +7,7 @@ interface UseVoiceDetectionOptions {
   enabled: boolean;
   triggerWord?: string;
   onPermissionDenied?: () => void;
+  onTrigger?: () => void;
 }
 
 interface UseVoiceDetectionResult {
@@ -16,11 +17,12 @@ interface UseVoiceDetectionResult {
 }
 
 const DEFAULT_TRIGGER = 'paso';
+// BUG-03: preferimos reconocimiento en dispositivo para reducir latencia
 const RECOGNITION_OPTIONS = {
-  lang: 'es-AR',
+  lang: 'es-ES',
   continuous: true,
   interimResults: true,
-  requiresOnDeviceRecognition: false,
+  requiresOnDeviceRecognition: true,
 };
 
 // Verifica disponibilidad del módulo nativo una sola vez al cargar.
@@ -50,6 +52,7 @@ export function useVoiceDetection({
   enabled,
   triggerWord = DEFAULT_TRIGGER,
   onPermissionDenied,
+  onTrigger,
 }: UseVoiceDetectionOptions): UseVoiceDetectionResult {
   const status = useTimerStore((s) => s.status);
   const passTurn = useTimerStore((s) => s.passTurn);
@@ -125,12 +128,14 @@ export function useVoiceDetection({
 
       SpeechModule.addListener('result', (data: unknown) => {
         if (!shouldListen) return;
-        const event = data as { results: Array<{ transcript: string }> };
+        // BUG-03: debounce reducido de 1500ms a 800ms para menor latencia
+        const event = data as { results: Array<{ transcript: string; isFinal?: boolean }> };
         const now = Date.now();
-        if (now - lastTriggerRef.current < 1500) return;
+        if (now - lastTriggerRef.current < 800) return;
         for (const result of event.results) {
           if (result.transcript.toLowerCase().trim().includes(triggerWord.toLowerCase())) {
             lastTriggerRef.current = now;
+            onTrigger?.();
             passTurn('voice');
             break;
           }
@@ -139,7 +144,7 @@ export function useVoiceDetection({
     ];
 
     return () => subs.forEach((s) => s.remove());
-  }, [enabled, shouldListen, triggerWord, startListening, passTurn]);
+  }, [enabled, shouldListen, triggerWord, startListening, passTurn, onTrigger]);
 
   // ── Control start/stop según estado del timer ──────────────────────────
   useEffect(() => {
