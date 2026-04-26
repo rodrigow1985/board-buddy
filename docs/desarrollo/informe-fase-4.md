@@ -76,4 +76,8 @@ Los chips ya estaban construidos en Fase 3 con `voiceEnabled: false`. En esta fa
 
 - **No testeable con Jest**: `expo-speech-recognition` no tiene mock para tests unitarios en Node.js. La feature se verifica manualmente en dispositivo.
 - **Solo funciona en dispositivo real**: El simulador/emulador de iOS/Android no soporta reconocimiento de voz en la mayoría de casos.
-- **`voiceEnabled` hardcodeado en `true`**: En Fase 5 se leerá del `settingsStore`.
+- **Requiere Development Build**: `expo-speech-recognition` es un módulo nativo no incluido en Expo Go. Para probarlo se necesita `eas build` o `npx expo run:android`.
+
+## Fallback en Expo Go
+
+El hook detecta automáticamente si el módulo nativo está disponible mediante `getSpeechModule()` con try/catch. Si no está (Expo Go), retorna `state: 'unavailable'` sin errores. La app funciona completamente con botones en ese entorno.

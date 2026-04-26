@@ -34,20 +34,20 @@ Se implementó el flujo completo de la aplicación: Home → Setup → Timer →
 ## Flujo implementado
 
 ```
-Home ──────────────────────────────────────────────────────────────────────
+Home ──────────────────────────────────────────────────────────────────
   │  Pulsar "Jugar Rummikub"
   ↓
-Setup ────────────────────────────────────────────────────────────────────
+Setup ────────────────────────────────────────────────────────────────
   │  Elegir duración, jugadores, voz → "Iniciar partida"
   │  → initGame(players, turnDurationMs) + router.replace('/timer')
   ↓
-Timer (Fase 3+4) ─────────────────────────────────────────────────────────
+Timer (Fase 3+4) ─────────────────────────────────────────────────────
   │  Juego en curso. "Fin de partida" →
   ↓
-Summary ──────────────────────────────────────────────────────────────────
+Summary ──────────────────────────────────────────────────────────────
   │  "Nueva partida" → Setup | "Inicio" → Home (con reset)
   ↓
-Home (con resume banner si partida interrumpida) ──────────────────────────
+Home (con resume banner si partida interrumpida) ──────────────────────
 ```
 
 ## Componentes de UI
@@ -99,3 +99,17 @@ card: {
   elevation: 2,           // Android ignora shadow*, iOS ignora elevation
 }
 ```
+
+## Bugs corregidos post-implementación
+
+### Infinite re-render al iniciar partida
+
+**Causa:** `useTimerStore((s) => ({ pause, resume, passTurn, ... }))` retorna un objeto nuevo en cada render → Zustand lo detecta como cambio de estado → loop infinito.
+
+**Fix:** Usar `useTimerStore.getState()` para obtener acciones (referencias estables en Zustand). Complementado con `useCallback` para `onPermissionDenied` y patrón `useRef` para `requestPermission` en effects.
+
+### Mezcla de native/non-native driver en TopProgressBar
+
+**Causa:** `pulseAnim` (opacity) usaba `useNativeDriver: true` pero se aplicaba al mismo `Animated.View` que `widthAnim` (width), que requiere `useNativeDriver: false`. React Native no permite mezclar drivers en el mismo nodo.
+
+**Fix:** Cambiar `pulseAnim` a `useNativeDriver: false` en todas sus animaciones.
