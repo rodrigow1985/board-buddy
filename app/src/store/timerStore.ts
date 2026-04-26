@@ -27,6 +27,7 @@ interface TimerState {
   startedAt: number | null;       // timestamp de inicio de sesión
   turnStartedAt: number | null;   // timestamp de inicio del turno actual
   turnHistory: TurnRecord[];
+  winnerId: string | null;        // jugador ganador (en RAM, se borra al reset)
 
   // Acciones
   initGame: (players: Player[], turnDurationMs: number) => void;
@@ -39,6 +40,7 @@ interface TimerState {
   endTransition: () => void;
   finish: () => void;
   tick: (elapsedMs: number) => void;
+  setWinner: (playerId: string | null) => void;
   reset: () => void;
 }
 
@@ -52,6 +54,7 @@ const INITIAL_STATE: Omit<TimerState, keyof ReturnType<typeof createActions>> = 
   startedAt: null,
   turnStartedAt: null,
   turnHistory: [],
+  winnerId: null,
 };
 
 function createActions(set: (fn: (s: TimerState) => Partial<TimerState>) => void) {
@@ -162,6 +165,9 @@ function createActions(set: (fn: (s: TimerState) => Partial<TimerState>) => void
       }),
 
     finish: () => set(() => ({ status: 'finished' })),
+
+    setWinner: (playerId: string | null) =>
+      set(() => ({ winnerId: playerId })),
 
     tick: (elapsedMs: number) =>
       set((s) => {

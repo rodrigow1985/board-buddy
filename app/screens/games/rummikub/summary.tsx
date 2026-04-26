@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useTimerStore } from '@src/store/timerStore';
+import { useCallback } from 'react';
 import { voicePassRate, playerInitial } from '@src/utils/players';
 import { formatTime } from '@src/utils/time';
 import {
@@ -23,7 +24,14 @@ export default function SummaryScreen() {
   const players = useTimerStore((s) => s.players);
   const turnHistory = useTimerStore((s) => s.turnHistory);
   const turnDurationMs = useTimerStore((s) => s.turnDurationMs);
+  const winnerId = useTimerStore((s) => s.winnerId);
   const reset = useTimerStore((s) => s.reset);
+  const setWinner = useTimerStore((s) => s.setWinner);
+
+  const handleSelectWinner = useCallback((playerId: string) => {
+    // Toggle: tocar al mismo jugador lo deselecciona
+    setWinner(winnerId === playerId ? null : playerId);
+  }, [winnerId, setWinner]);
 
   // Estadísticas globales
   const totalTurns = players.reduce((sum, p) => sum + p.turns, 0);
@@ -57,6 +65,40 @@ export default function SummaryScreen() {
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
       >
+        {/* ¿Quién ganó? */}
+        <View style={styles.winnerSection}>
+          <Text style={styles.sectionTitle}>¿QUIÉN GANÓ?</Text>
+          <View style={styles.winnerChips}>
+            {players.map((player) => {
+              const isWinner = winnerId === player.id;
+              return (
+                <Pressable
+                  key={player.id}
+                  style={({ pressed }) => [
+                    styles.winnerChip,
+                    { borderColor: player.color },
+                    isWinner && { backgroundColor: player.color },
+                    pressed && styles.winnerChipPressed,
+                  ]}
+                  onPress={() => handleSelectWinner(player.id)}
+                  accessibilityLabel={`Marcar a ${player.name} como ganador`}
+                >
+                  {isWinner && (
+                    <Ionicons name="trophy" size={14} color="#FFFFFF" />
+                  )}
+                  <Text style={[
+                    styles.winnerChipLabel,
+                    isWinner && styles.winnerChipLabelSelected,
+                    !isWinner && { color: player.color },
+                  ]}>
+                    {player.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
         {/* Card stats globales */}
         <View style={styles.statsCard}>
           <StatBlock value={String(totalTurns)} label="Turnos" />
@@ -103,14 +145,23 @@ export default function SummaryScreen() {
           </View>
 
           {/* Filas de jugadores */}
-          {players.map((player, idx) => (
+          {players.map((player, idx) => {
+            const isWinner = winnerId === player.id;
+            return (
             <View
               key={player.id}
-              style={[styles.tableRow, idx < players.length - 1 && styles.tableRowBorder]}
+              style={[
+                styles.tableRow,
+                idx < players.length - 1 && styles.tableRowBorder,
+                isWinner && { backgroundColor: player.color + '18' },
+              ]}
             >
               <View style={[styles.tableCell, styles.tableCellName, styles.playerCell]}>
-                <View style={[styles.dot, { backgroundColor: player.color }]} />
-                <Text style={styles.playerName} numberOfLines={1}>
+                {isWinner
+                  ? <Ionicons name="trophy" size={14} color={player.color} />
+                  : <View style={[styles.dot, { backgroundColor: player.color }]} />
+                }
+                <Text style={[styles.playerName, isWinner && { color: player.color, fontFamily: FontWeights.sans.semibold }]} numberOfLines={1}>
                   {player.name}
                 </Text>
               </View>
@@ -124,7 +175,8 @@ export default function SummaryScreen() {
                 {player.passesByVoice}
               </Text>
             </View>
-          ))}
+            );
+          })}
         </View>
       </ScrollView>
 
@@ -242,6 +294,34 @@ const styles = StyleSheet.create({
     fontFamily: FontWeights.sans.regular,
     fontSize: FontSizes.captionS,
     color: Colors.ink2,
+  },
+  winnerSection: {
+    gap: Spacing.md,
+  },
+  winnerChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  winnerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    borderRadius: Radii.pill,
+    borderWidth: 2,
+    backgroundColor: 'transparent',
+  },
+  winnerChipPressed: {
+    opacity: 0.75,
+  },
+  winnerChipLabel: {
+    fontFamily: FontWeights.sans.semibold,
+    fontSize: FontSizes.bodyS,
+  },
+  winnerChipLabelSelected: {
+    color: '#FFFFFF',
   },
   sectionTitle: {
     fontFamily: FontWeights.sans.semibold,
