@@ -30,23 +30,23 @@
 
 **Elementos visuales:**
 
-1. **Barra de progreso vertical** (fondo de pantalla): ocupa el 100% del alto. Al inicio del turno está llena. Se vacía de arriba hacia abajo conforme pasa el tiempo. Cuando llega al fondo = tiempo agotado.
-2. **Nombre del jugador actual** — centrado en la parte superior, tipografía grande.
-3. **Tiempo restante en segundos** — centrado en el medio de la pantalla, tipografía muy grande (≥80pt), mostrando `MM:SS`.
-4. **Indicador de jugador siguiente** — texto pequeño en la parte inferior mostrando quién juega después.
-5. **Botones de control** — debajo del tiempo, fila horizontal:
-   - **Pausar / Reanudar** (ícono play/pause)
-   - **Reiniciar turno** (ícono reset/loop)
-   - **Pasar turno** (ícono flecha adelante)
+1. **Barra de progreso horizontal** (top de pantalla, 8dp de alto, `position: absolute top: 0`): al inicio del turno está llena (100% del ancho). Se vacía de derecha a izquierda conforme pasa el tiempo. Cuando llega a 0% = tiempo agotado.
+2. **Nombre del jugador actual** — pill centrado en la pantalla, tipografía grande uppercase.
+3. **Tiempo restante** — centrado en el medio de la pantalla, tipografía muy grande (168sp Fraunces), mostrando `MM:SS`.
+4. **Indicador de jugador siguiente** — "Sigue" + avatar + nombre, debajo del tiempo.
+5. **Botones de control** — fila horizontal inferior, 3 botones de 64dp de alto:
+   - **Pausar / Reanudar** (ícono play/pause) — botón primario
+   - **Reiniciar turno** (ícono reset)
+   - **Pasar turno** (ícono skip)
 
 **Estados del temporizador:**
 
-| Estado | Color de fondo | Comportamiento |
-|--------|---------------|----------------|
-| Corriendo | Azul/verde intenso | Barra se vacía suavemente |
-| Poco tiempo (≤20% restante) | Amarillo/naranja | Barra parpadea suavemente |
-| Tiempo agotado | Rojo | Flash de pantalla + vibración + sonido |
-| Pausado | Gris | Barra congelada, ícono pause visible |
+| Estado | Token de color | Hex | Comportamiento |
+|--------|---------------|-----|----------------|
+| Corriendo | `calm` | `#3F6B5E` | Barra se vacía suavemente (Reanimated 2, linear) |
+| Poco tiempo (≤20%) | `warn` | `#D88A2F` | Barra pulsa (opacity 1↔0.85, 800ms loop) |
+| Tiempo agotado | `alert` | `#B23A1F` | Flash pantalla 300ms + vibración + sonido |
+| Pausado | `paused` | `#5C544C` | Barra congelada, timer con opacity 0.55 |
 
 **Transición de turno:**
 - Al pasar turno (voz o botón): animación de slide horizontal hacia el siguiente jugador
