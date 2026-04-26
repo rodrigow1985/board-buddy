@@ -40,6 +40,7 @@ interface TimerState {
   endTransition: () => void;
   finish: () => void;
   tick: (elapsedMs: number) => void;
+  setTimeRemaining: (ms: number) => void;
   setWinner: (playerId: string | null) => void;
   reset: () => void;
 }
@@ -168,6 +169,12 @@ function createActions(set: (fn: (s: TimerState) => Partial<TimerState>) => void
 
     setWinner: (playerId: string | null) =>
       set(() => ({ winnerId: playerId })),
+
+    setTimeRemaining: (ms: number) =>
+      set((s) => {
+        if (s.status !== 'running') return {};
+        return { timeRemainingMs: Math.max(0, ms) };
+      }),
 
     tick: (elapsedMs: number) =>
       set((s) => {
