@@ -1,12 +1,10 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Animated,
   Dimensions,
-  Platform,
-  StatusBar as RNStatusBar,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,6 +13,7 @@ import { useCountdown } from '@src/hooks/useCountdown';
 import { useBackgroundTimer } from '@src/hooks/useBackgroundTimer';
 import * as Haptics from 'expo-haptics';
 import { useHaptics } from '@src/hooks/useHaptics';
+import { useVoiceDetection } from '@src/hooks/useVoiceDetection';
 import { calcProgress, isWarnState } from '@src/utils/time';
 import { nextPlayerIndex } from '@src/utils/players';
 import { Colors, FontWeights, FontSizes, Spacing, Animations as Anim } from '@src/constants/tokens';
@@ -25,6 +24,7 @@ import { NextUpRow } from '@src/components/timer/NextUpRow';
 import { TimerControls } from '@src/components/timer/TimerControls';
 import { VoiceHint } from '@src/components/timer/VoiceHint';
 import { VoiceStatusChip } from '@src/components/timer/VoiceStatusChip';
+import { PermissionSnackbar } from '@src/components/common/PermissionSnackbar';
 
 // Mapa de status del timer a índice de color de fondo
 function bgIndexForStatus(status: TimerStatus, isWarn: boolean): number {
@@ -42,6 +42,16 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 export default function TimerScreen() {
   const insets = useSafeAreaInsets();
   const haptics = useHaptics();
+
+  // Voz habilitada (en Fase 5 vendrá del settingsStore)
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [showPermissionSnackbar, setShowPermissionSnackbar] = useState(false);
+
+  const { state: voiceState, requestPermission } = useVoiceDetection({
+    enabled: voiceEnabled,
+    triggerWord: 'paso',
+    onPermissionDenied: () => setShowPermissionSnackbar(true),
+  });
 
   const status = useTimerStore((s) => s.status);
   const players = useTimerStore((s) => s.players);
@@ -80,8 +90,12 @@ export default function TimerScreen() {
   useEffect(() => {
     if (status === 'idle' && players.length > 0) {
       start();
+      // Solicitar permisos de micrófono al iniciar la partida
+      if (voiceEnabled) {
+        requestPermission();
+      }
     }
-  }, [status, players.length, start]);
+  }, [status, players.length, start, voiceEnabled, requestPermission]);
 
   // ── Animación del color de fondo ──────────────────────────────────────────
   const isWarn = isWarnState(timeRemainingMs, turnDurationMs);
@@ -240,12 +254,12 @@ export default function TimerScreen() {
   const isPaused = status === 'paused';
   const isTimeout = status === 'timeout';
 
-  // Chip de voz: en esta fase sin detección real, solo mostramos estado UI
+  // Chip de voz: estado real del reconocedor
   const voiceChipState = isTransitioning
     ? 'transitioning'
-    : isPaused
-    ? 'paused'
-    : 'listening';
+    : voiceState === 'listening'
+    ? 'listening'
+    : 'paused';
 
   if (!currentPlayer) return null;
 
@@ -264,7 +278,7 @@ export default function TimerScreen() {
 
       {/* Fila superior: chip de voz */}
       <View style={[styles.topRow, { paddingTop: insets.top + 16 }]}>
-        <VoiceStatusChip state={voiceChipState} voiceEnabled={false} />
+        <VoiceStatusChip state={voiceChipState} voiceEnabled={voiceEnabled} />
         {isPaused && (
           <View style={styles.pauseBanner}>
             <Text style={styles.pauseLabel}>PARTIDA EN PAUSA</Text>
@@ -332,8 +346,17 @@ export default function TimerScreen() {
           onPassTurn={handlePassTurn}
           disabled={isTransitioning}
         />
-        <VoiceHint visible={false} />
+        <VoiceHint visible={voiceEnabled && voiceState === 'listening'} />
       </View>
+
+      {/* Snackbar de permisos denegados */}
+      <PermissionSnackbar
+        visible={showPermissionSnackbar}
+        onDismiss={() => {
+          setShowPermissionSnackbar(false);
+          setVoiceEnabled(false);
+        }}
+      />
     </Animated.View>
   );
 }
