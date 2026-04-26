@@ -1,0 +1,5 @@
+.claude/
+.agents/
+docs/
+design/
+node_modules/

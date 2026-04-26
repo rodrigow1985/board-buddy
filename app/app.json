@@ -26,7 +26,8 @@
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.VIBRATE"
-      ]
+      ],
+      "package": "com.rodrigoweichert.boardbuddy"
     },
     "web": {
       "output": "static",
@@ -47,6 +48,14 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "root": "screens"
+      },
+      "eas": {
+        "projectId": "f0c73239-70d8-4f3f-bb42-afc40bc9c8ba"
+      }
     }
   }
 }
