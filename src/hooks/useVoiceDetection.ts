@@ -1,11 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
-import {
-  ExpoSpeechRecognitionModule,
-  useSpeechRecognitionEvent,
-} from 'expo-speech-recognition';
 import { useTimerStore } from '@src/store/timerStore';
 
-export type VoiceDetectionState = 'idle' | 'requesting' | 'listening' | 'paused' | 'error';
+export type VoiceDetectionState = 'idle' | 'requesting' | 'listening' | 'paused' | 'error' | 'unavailable';
 
 interface UseVoiceDetectionOptions {
   enabled: boolean;
@@ -25,7 +21,30 @@ const RECOGNITION_OPTIONS = {
   continuous: true,
   interimResults: true,
   requiresOnDeviceRecognition: false,
-} as const;
+};
+
+// Verifica disponibilidad del módulo nativo una sola vez al cargar.
+// En Expo Go, el módulo no existe y esto retorna null silenciosamente.
+function getSpeechModule() {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const mod = require('expo-speech-recognition');
+    if (typeof mod?.ExpoSpeechRecognitionModule?.start === 'function') {
+      return mod.ExpoSpeechRecognitionModule as {
+        start: (opts: typeof RECOGNITION_OPTIONS) => void;
+        stop: () => void;
+        abort: () => void;
+        requestPermissionsAsync: () => Promise<{ granted: boolean }>;
+        addListener: (event: string, listener: (data: unknown) => void) => { remove: () => void };
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+const SpeechModule = getSpeechModule();
 
 export function useVoiceDetection({
   enabled,
@@ -35,22 +54,18 @@ export function useVoiceDetection({
   const status = useTimerStore((s) => s.status);
   const passTurn = useTimerStore((s) => s.passTurn);
 
-  const stateRef = useRef<VoiceDetectionState>('idle');
+  const stateRef = useRef<VoiceDetectionState>(SpeechModule ? 'idle' : 'unavailable');
   const permissionRef = useRef<boolean | null>(null);
   const isRunningRef = useRef(false);
-  // Previene múltiples passTurn por la misma detección
   const lastTriggerRef = useRef<number>(0);
 
-  const shouldListen =
-    enabled &&
-    permissionRef.current === true &&
-    (status === 'running');
+  const shouldListen = enabled && permissionRef.current === true && status === 'running';
 
-  // ── Iniciar reconocimiento ──────────────────────────────��───────────────
+  // ── Iniciar / detener reconocimiento ──────────────────────────────────
   const startListening = useCallback(() => {
-    if (isRunningRef.current) return;
+    if (!SpeechModule || isRunningRef.current) return;
     try {
-      ExpoSpeechRecognitionModule.start(RECOGNITION_OPTIONS);
+      SpeechModule.start(RECOGNITION_OPTIONS);
       isRunningRef.current = true;
       stateRef.current = 'listening';
     } catch {
@@ -60,9 +75,9 @@ export function useVoiceDetection({
   }, []);
 
   const stopListening = useCallback(() => {
-    if (!isRunningRef.current) return;
+    if (!SpeechModule || !isRunningRef.current) return;
     try {
-      ExpoSpeechRecognitionModule.abort();
+      SpeechModule.abort();
     } catch {
       // ignorar
     }
@@ -70,60 +85,61 @@ export function useVoiceDetection({
     stateRef.current = 'paused';
   }, []);
 
-  // ── Eventos del reconocedor ─────────────────────────────────────────────
-
-  useSpeechRecognitionEvent('start', () => {
-    isRunningRef.current = true;
-    stateRef.current = 'listening';
-  });
-
-  useSpeechRecognitionEvent('end', () => {
-    isRunningRef.current = false;
-    // Reiniciar automáticamente si sigue siendo necesario
-    if (shouldListen) {
-      setTimeout(() => {
-        if (shouldListen && !isRunningRef.current) {
-          startListening();
-        }
-      }, 300);
-    }
-  });
-
-  useSpeechRecognitionEvent('error', (event) => {
-    isRunningRef.current = false;
-    const recoverable = ['no-speech', 'speech-timeout', 'aborted', 'network'];
-    if (recoverable.includes(event.error) && shouldListen) {
-      setTimeout(() => {
-        if (shouldListen && !isRunningRef.current) {
-          startListening();
-        }
-      }, 500);
-    } else {
-      stateRef.current = 'error';
-    }
-  });
-
-  useSpeechRecognitionEvent('result', (event) => {
-    if (!shouldListen) return;
-
-    const now = Date.now();
-    // Debounce: ignorar si ya se disparó en los últimos 1500ms
-    if (now - lastTriggerRef.current < 1500) return;
-
-    for (const result of event.results) {
-      const transcript = result.transcript.toLowerCase().trim();
-      if (transcript.includes(triggerWord.toLowerCase())) {
-        lastTriggerRef.current = now;
-        passTurn('voice');
-        break;
-      }
-    }
-  });
-
-  // ── Efectos de control ────────────────────────��────────────────────────
-
+  // ── Suscripción a eventos nativos ──────────────────────────────────────
+  // Se usa addListener directamente para evitar depender de useSpeechRecognitionEvent,
+  // que falla en Expo Go al no encontrar el módulo nativo.
   useEffect(() => {
-    if (!enabled || permissionRef.current !== true) return;
+    if (!SpeechModule || !enabled) return;
+
+    const subs = [
+      SpeechModule.addListener('start', () => {
+        isRunningRef.current = true;
+        stateRef.current = 'listening';
+      }),
+
+      SpeechModule.addListener('end', () => {
+        isRunningRef.current = false;
+        if (shouldListen) {
+          setTimeout(() => {
+            if (shouldListen && !isRunningRef.current) startListening();
+          }, 300);
+        }
+      }),
+
+      SpeechModule.addListener('error', (data: unknown) => {
+        const event = data as { error: string };
+        isRunningRef.current = false;
+        const recoverable = ['no-speech', 'speech-timeout', 'aborted', 'network'];
+        if (recoverable.includes(event.error) && shouldListen) {
+          setTimeout(() => {
+            if (shouldListen && !isRunningRef.current) startListening();
+          }, 500);
+        } else {
+          stateRef.current = 'error';
+        }
+      }),
+
+      SpeechModule.addListener('result', (data: unknown) => {
+        if (!shouldListen) return;
+        const event = data as { results: Array<{ transcript: string }> };
+        const now = Date.now();
+        if (now - lastTriggerRef.current < 1500) return;
+        for (const result of event.results) {
+          if (result.transcript.toLowerCase().trim().includes(triggerWord.toLowerCase())) {
+            lastTriggerRef.current = now;
+            passTurn('voice');
+            break;
+          }
+        }
+      }),
+    ];
+
+    return () => subs.forEach((s) => s.remove());
+  }, [enabled, shouldListen, triggerWord, startListening, passTurn]);
+
+  // ── Control start/stop según estado del timer ──────────────────────────
+  useEffect(() => {
+    if (!SpeechModule || !enabled || permissionRef.current !== true) return;
 
     if (shouldListen && !isRunningRef.current) {
       startListening();
@@ -133,25 +149,28 @@ export function useVoiceDetection({
 
     return () => {
       if (isRunningRef.current) {
-        try { ExpoSpeechRecognitionModule.abort(); } catch { /* ignorar */ }
+        try { SpeechModule.abort(); } catch { /* ignorar */ }
         isRunningRef.current = false;
       }
     };
   }, [enabled, shouldListen, startListening, stopListening]);
 
   // ── Gestión de permisos ────────────────────────────────────────────────
-
   const requestPermission = useCallback(async (): Promise<boolean> => {
+    if (!SpeechModule) {
+      // En Expo Go no hay módulo — retornamos false silenciosamente
+      permissionRef.current = false;
+      return false;
+    }
     stateRef.current = 'requesting';
     try {
-      const response = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-      const granted = response.granted;
-      permissionRef.current = granted;
-      if (!granted) {
+      const response = await SpeechModule.requestPermissionsAsync();
+      permissionRef.current = response.granted;
+      if (!response.granted) {
         stateRef.current = 'idle';
         onPermissionDenied?.();
       }
-      return granted;
+      return response.granted;
     } catch {
       stateRef.current = 'error';
       permissionRef.current = false;
