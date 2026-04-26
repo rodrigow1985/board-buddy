@@ -52,26 +52,27 @@ export default function TimerScreen() {
   const [voiceEnabled, setVoiceEnabled] = useState(voiceEnabledSetting);
   const [showPermissionSnackbar, setShowPermissionSnackbar] = useState(false);
 
+  const handlePermissionDenied = useCallback(() => {
+    setShowPermissionSnackbar(true);
+  }, []);
+
   const { state: voiceState, requestPermission } = useVoiceDetection({
     enabled: voiceEnabled,
     triggerWord: 'paso',
-    onPermissionDenied: () => setShowPermissionSnackbar(true),
+    onPermissionDenied: handlePermissionDenied,
   });
 
+  // Estado reactivo del store (primitivos — referencia estable)
   const status = useTimerStore((s) => s.status);
   const players = useTimerStore((s) => s.players);
   const currentPlayerIndex = useTimerStore((s) => s.currentPlayerIndex);
   const timeRemainingMs = useTimerStore((s) => s.timeRemainingMs);
   const turnDurationMs = useTimerStore((s) => s.turnDurationMs);
-  const { pause, resume, passTurn, restartTurn, endTransition, start, initGame } = useTimerStore((s) => ({
-    pause: s.pause,
-    resume: s.resume,
-    passTurn: s.passTurn,
-    restartTurn: s.restartTurn,
-    endTransition: s.endTransition,
-    start: s.start,
-    initGame: s.initGame,
-  }));
+
+  // Acciones: son referencias estables en Zustand, se obtienen con getState()
+  // para no crear un nuevo objeto en cada render (evita loop infinito)
+  const { pause, resume, passTurn, restartTurn, endTransition, start, initGame } =
+    useTimerStore.getState();
 
   // Activar hooks del timer
   useCountdown();
@@ -81,7 +82,8 @@ export default function TimerScreen() {
   useEffect(() => {
     if (status === 'idle' && players.length === 0) {
       const { createPlayer } = require('@src/utils/players');
-      initGame(
+      // initGame() es estable (getState) — no es dependencia
+      useTimerStore.getState().initGame(
         [
           createPlayer(0, 'Rodrigo'),
           createPlayer(1, 'Ana'),
@@ -90,17 +92,23 @@ export default function TimerScreen() {
         120_000,
       );
     }
-  }, [status, players.length, initGame]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, players.length]);
+
+  // Ref estable para requestPermission — evita que sea dependencia del effect
+  const requestPermissionRef = useRef(requestPermission);
+  useEffect(() => { requestPermissionRef.current = requestPermission; }, [requestPermission]);
 
   useEffect(() => {
     if (status === 'idle' && players.length > 0) {
       start();
-      // Solicitar permisos de micrófono al iniciar la partida
       if (voiceEnabled) {
-        requestPermission();
+        requestPermissionRef.current();
       }
     }
-  }, [status, players.length, start, voiceEnabled, requestPermission]);
+    // start() es estable (getState). voiceEnabled es primitivo. players.length es primitivo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, players.length, voiceEnabled]);
 
   // ── Animación del color de fondo ──────────────────────────────────────────
   const isWarn = isWarnState(timeRemainingMs, turnDurationMs);
