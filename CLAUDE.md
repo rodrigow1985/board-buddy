@@ -66,4 +66,14 @@ npx expo start          # Servidor de desarrollo
 npx expo start --ios    # Simulador iOS
 npx expo start --android # Emulador Android
 npx jest                # Tests
+cd app && eas build --profile preview --platform android  # APK de prueba
 ```
+
+## Workflow de bugs
+
+Usar `/bug-report` cuando el usuario reporta algo que falla. El skill crea:
+- `docs/desarrollo/bugs/BUG-{N}/reporte.md` — descripción y análisis
+- `docs/desarrollo/bugs/BUG-{N}/informe.md` — fix y verificación (al cierre)
+- Issue en GitHub con labels de severidad
+- Rama `bug/{N}-{slug}` para aislar el fix
+- PR hacia `develop` al terminar
