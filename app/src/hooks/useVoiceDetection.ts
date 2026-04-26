@@ -22,7 +22,7 @@ const RECOGNITION_OPTIONS = {
   lang: 'es-ES',
   continuous: true,
   interimResults: true,
-  requiresOnDeviceRecognition: true,
+  requiresOnDeviceRecognition: false,
 };
 
 // Verifica disponibilidad del módulo nativo una sola vez al cargar.
