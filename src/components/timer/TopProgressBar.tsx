@@ -29,12 +29,12 @@ export function TopProgressBar({ progress, isWarn }: Props) {
           Animated.timing(pulseAnim, {
             toValue: 0.85,
             duration: Animations.warnPulse / 2,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
           Animated.timing(pulseAnim, {
             toValue: 1,
             duration: Animations.warnPulse / 2,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
         ]),
       );
@@ -44,7 +44,7 @@ export function TopProgressBar({ progress, isWarn }: Props) {
       Animated.timing(pulseAnim, {
         toValue: 1,
         duration: 150,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }).start();
     }
     return () => pulseLoopRef.current?.stop();
