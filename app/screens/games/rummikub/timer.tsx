@@ -18,10 +18,9 @@ import * as Haptics from 'expo-haptics';
 import { useHaptics } from '@src/hooks/useHaptics';
 import { useVoiceDetection } from '@src/hooks/useVoiceDetection';
 import { useAudio } from '@src/hooks/useAudio';
-import { calcProgress, isWarnState } from '@src/utils/time';
+import { isWarnState } from '@src/utils/time';
 import { nextPlayerIndex } from '@src/utils/players';
 import { Colors, FontWeights, FontSizes, Spacing, Radii, Animations as Anim } from '@src/constants/tokens';
-import { TopProgressBar } from '@src/components/timer/TopProgressBar';
 import { TimerDisplay } from '@src/components/timer/TimerDisplay';
 import { PlayerChip } from '@src/components/timer/PlayerChip';
 import { NextUpRow } from '@src/components/timer/NextUpRow';
@@ -269,7 +268,6 @@ export default function TimerScreen() {
       : null;
   const nextIndex = nextPlayerIndex(currentPlayerIndex, players.length);
   const nextPlayer = players.length > 1 ? players[nextIndex] : null;
-  const progress = calcProgress(timeRemainingMs, turnDurationMs);
   const isTransitioning = status === 'transitioning';
   const isPaused = status === 'paused';
   const isTimeout = status === 'timeout';
@@ -292,9 +290,6 @@ export default function TimerScreen() {
         style={[StyleSheet.absoluteFill, { backgroundColor: flashOverlay }]}
         pointerEvents="none"
       />
-
-      {/* Barra de progreso horizontal (top) */}
-      <TopProgressBar progress={progress} isWarn={isWarn} />
 
       {/* Fila superior: chip de voz */}
       <View style={[styles.topRow, { paddingTop: insets.top + 16 }]}>
@@ -326,7 +321,7 @@ export default function TimerScreen() {
                 },
               ]}
             >
-              <PlayerChip name={outgoingPlayer.name} />
+              <PlayerChip name={outgoingPlayer.name} color={outgoingPlayer.color} />
               <TimerDisplay timeMs={0} paused={false} />
             </Animated.View>
             <Animated.View
@@ -338,13 +333,13 @@ export default function TimerScreen() {
                 },
               ]}
             >
-              <PlayerChip name={currentPlayer.name} />
+              <PlayerChip name={currentPlayer.name} color={currentPlayer.color} />
               <TimerDisplay timeMs={turnDurationMs} paused={false} />
             </Animated.View>
           </>
         ) : (
           <View style={styles.playerSlot}>
-            <PlayerChip name={currentPlayer.name} />
+            <PlayerChip name={currentPlayer.name} color={currentPlayer.color} />
             <TimerDisplay timeMs={timeRemainingMs} paused={isPaused} />
           </View>
         )}

@@ -3,11 +3,12 @@ import { FontWeights, FontSizes, Radii, Spacing } from '@src/constants/tokens';
 
 interface Props {
   name: string;
+  color: string;
 }
 
-export function PlayerChip({ name }: Props) {
+export function PlayerChip({ name, color }: Props) {
   return (
-    <View style={styles.pill}>
+    <View style={[styles.pill, { backgroundColor: color }]}>
       <Text style={styles.name} numberOfLines={1}>
         {name.toUpperCase()}
       </Text>
@@ -21,9 +22,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.sm,
     borderRadius: Radii.pill,
-    backgroundColor: 'rgba(0,0,0,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
     maxWidth: 260,
   },
   name: {
