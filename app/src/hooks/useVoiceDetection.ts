@@ -17,7 +17,6 @@ interface UseVoiceDetectionResult {
 }
 
 const DEFAULT_TRIGGER = 'paso';
-// BUG-03: preferimos reconocimiento en dispositivo para reducir latencia
 const RECOGNITION_OPTIONS = {
   lang: 'es-ES',
   continuous: true,
@@ -68,6 +67,15 @@ export function useVoiceDetection({
   const shouldListen = enabled && permissionRef.current === true
     && (status === 'running' || status === 'timeout');
 
+  // BUG-22: ref sincronizada con shouldListen para usarla en closures de event handlers
+  // sin poner shouldListen en las deps del effect de suscripciones.
+  const shouldListenRef = useRef(shouldListen);
+  useEffect(() => { shouldListenRef.current = shouldListen; }, [shouldListen]);
+
+  // BUG-22: ref para saber si el cierre de sesión fue por error fatal.
+  // El handler de 'end' consulta esta ref para no reiniciar tras un error no-recuperable.
+  const fatalErrorRef = useRef(false);
+
   // ── Iniciar / detener reconocimiento ──────────────────────────────────
   const startListening = useCallback(() => {
     if (!SpeechModule || isRunningRef.current) return;
@@ -93,8 +101,9 @@ export function useVoiceDetection({
   }, []);
 
   // ── Suscripción a eventos nativos ──────────────────────────────────────
-  // Se usa addListener directamente para evitar depender de useSpeechRecognitionEvent,
-  // que falla en Expo Go al no encontrar el módulo nativo.
+  // BUG-22: los handlers usan shouldListenRef.current en lugar de shouldListen
+  // para tener siempre el valor más reciente sin recrear los listeners en cada
+  // transición de turno. 'shouldListen' ya no está en las deps de este effect.
   useEffect(() => {
     if (!SpeechModule || !enabled) return;
 
@@ -106,9 +115,14 @@ export function useVoiceDetection({
 
       SpeechModule.addListener('end', () => {
         isRunningRef.current = false;
-        if (shouldListen) {
+        // BUG-22: no reiniciar si el cierre fue por error fatal
+        if (fatalErrorRef.current) {
+          fatalErrorRef.current = false;
+          return;
+        }
+        if (shouldListenRef.current) {
           setTimeout(() => {
-            if (shouldListen && !isRunningRef.current) startListening();
+            if (shouldListenRef.current && !isRunningRef.current) startListening();
           }, 300);
         }
       }),
@@ -117,18 +131,19 @@ export function useVoiceDetection({
         const event = data as { error: string };
         isRunningRef.current = false;
         const recoverable = ['no-speech', 'speech-timeout', 'aborted', 'network'];
-        if (recoverable.includes(event.error) && shouldListen) {
+        if (recoverable.includes(event.error) && shouldListenRef.current) {
           setTimeout(() => {
-            if (shouldListen && !isRunningRef.current) startListening();
+            if (shouldListenRef.current && !isRunningRef.current) startListening();
           }, 500);
         } else {
+          // BUG-22: marcar error fatal para que 'end' no reactive el reconocedor
+          fatalErrorRef.current = true;
           setVoiceState('error');
         }
       }),
 
       SpeechModule.addListener('result', (data: unknown) => {
-        if (!shouldListen) return;
-        // BUG-03: debounce reducido de 1500ms a 800ms para menor latencia
+        if (!shouldListenRef.current) return;
         const event = data as { results: Array<{ transcript: string; isFinal?: boolean }> };
         const now = Date.now();
         if (now - lastTriggerRef.current < 800) return;
@@ -144,7 +159,8 @@ export function useVoiceDetection({
     ];
 
     return () => subs.forEach((s) => s.remove());
-  }, [enabled, shouldListen, triggerWord, startListening, passTurn, onTrigger]);
+  // BUG-22: 'shouldListen' eliminado de deps — los closures usan shouldListenRef.current
+  }, [enabled, triggerWord, startListening, passTurn, onTrigger]);
 
   // ── Control start/stop según estado del timer ──────────────────────────
   useEffect(() => {
