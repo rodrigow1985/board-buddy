@@ -3,7 +3,7 @@
 **Issue:** rodrigow1985/board-buddy#25
 **Fecha reporte:** 2026-04-27
 **Severidad:** Media
-**Estado:** Abierto
+**Estado:** Cerrado ✓
 
 ---
 
