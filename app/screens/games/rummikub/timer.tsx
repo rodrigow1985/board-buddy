@@ -6,10 +6,12 @@ import {
   StyleSheet,
   Animated,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as NavigationBar from 'expo-navigation-bar';
 import { useTimerStore, TimerStatus } from '@src/store/timerStore';
 import { useSettingsStore } from '@src/store/settingsStore';
 import { useCountdown } from '@src/hooks/useCountdown';
@@ -139,6 +141,17 @@ export default function TimerScreen() {
     inputRange: [0, 1, 2, 3],
     outputRange: BG_COLORS,
   });
+
+  // ── BUG-25: sincronizar nav bar de Android con el color de fondo del timer ─
+  // edgeToEdgeEnabled: true extiende el contenido detrás de la nav bar, pero
+  // Android dibuja un scrim negro por defecto. Hacemos la nav bar transparente
+  // y usamos el mismo color que el fondo de la pantalla.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const color = BG_COLORS[bgIndexForStatus(status, isWarn)];
+    NavigationBar.setBackgroundColorAsync(color);
+    NavigationBar.setButtonStyleAsync('light');
+  }, [status, isWarn]);
 
   // ── Flash rojo en timeout ──────────────────────────────────────────────────
   const flashAnim = useRef(new Animated.Value(0)).current;
