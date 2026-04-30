@@ -3,12 +3,37 @@ import { useTimerStore } from '@src/store/timerStore';
 
 export type VoiceDetectionState = 'idle' | 'requesting' | 'listening' | 'paused' | 'error' | 'unavailable';
 
-interface UseVoiceDetectionOptions {
-  enabled: boolean;
-  triggerWord?: string;
-  onPermissionDenied?: () => void;
-  onTrigger?: () => void;
+// ─── Trigger: palabra clave + aliases + callback ──────────────────
+
+export interface VoiceTrigger {
+  word: string;
+  aliases?: string[];
+  onDetected: () => void;
 }
+
+// ─── Opciones: modo single (Rummikub) o multi (Truco) ─────────────
+
+interface UseVoiceDetectionOptionsBase {
+  enabled: boolean;
+  onPermissionDenied?: () => void;
+}
+
+interface SingleTriggerOptions extends UseVoiceDetectionOptionsBase {
+  triggerWord?: string;
+  onTrigger?: () => void;
+  triggers?: never;
+  /** Si se pasa, useTimerStore se usa para shouldListen y passTurn */
+  useTimer?: boolean;
+}
+
+interface MultiTriggerOptions extends UseVoiceDetectionOptionsBase {
+  triggers: VoiceTrigger[];
+  triggerWord?: never;
+  onTrigger?: never;
+  useTimer?: never;
+}
+
+type UseVoiceDetectionOptions = SingleTriggerOptions | MultiTriggerOptions;
 
 interface UseVoiceDetectionResult {
   state: VoiceDetectionState;
@@ -47,13 +72,51 @@ function getSpeechModule() {
 
 const SpeechModule = getSpeechModule();
 
-export function useVoiceDetection({
-  enabled,
-  triggerWord = DEFAULT_TRIGGER,
-  onPermissionDenied,
-  onTrigger,
-}: UseVoiceDetectionOptions): UseVoiceDetectionResult {
-  const status = useTimerStore((s) => s.status);
+// ─── Matching de triggers ─────────────────────────────────────────
+
+/**
+ * Busca el trigger que mejor matchea en el transcript.
+ * Prioriza frases más largas para evitar falsos positivos
+ * (ej: "real envido" antes que "envido", "no quiero" antes que "quiero").
+ */
+function findBestMatch(
+  transcript: string,
+  triggers: VoiceTrigger[],
+): VoiceTrigger | null {
+  const normalized = transcript.toLowerCase().trim();
+
+  // Ordenar por longitud de palabra descendente (priorizar frases más largas)
+  const sorted = [...triggers].sort((a, b) => {
+    const aMax = Math.max(a.word.length, ...(a.aliases ?? []).map((al) => al.length));
+    const bMax = Math.max(b.word.length, ...(b.aliases ?? []).map((al) => al.length));
+    return bMax - aMax;
+  });
+
+  for (const trigger of sorted) {
+    const candidates = [trigger.word, ...(trigger.aliases ?? [])];
+    for (const candidate of candidates) {
+      if (normalized.includes(candidate.toLowerCase())) {
+        return trigger;
+      }
+    }
+  }
+
+  return null;
+}
+
+// ─── Hook principal ───────────────────────────────────────────────
+
+export function useVoiceDetection(options: UseVoiceDetectionOptions): UseVoiceDetectionResult {
+  const {
+    enabled,
+    onPermissionDenied,
+  } = options;
+
+  // Determinar si es modo timer (Rummikub) o standalone (Truco)
+  const isTimerMode = !('triggers' in options && options.triggers);
+
+  // Solo leer del timerStore si estamos en modo timer
+  const status = useTimerStore((s) => isTimerMode ? s.status : 'running');
   const passTurn = useTimerStore((s) => s.passTurn);
 
   const [voiceState, setVoiceState] = useState<VoiceDetectionState>(
@@ -63,20 +126,38 @@ export function useVoiceDetection({
   const isRunningRef = useRef(false);
   const lastTriggerRef = useRef<number>(0);
 
+  // Construir la lista de triggers
+  const triggersRef = useRef<VoiceTrigger[]>([]);
+
+  // En modo timer: un solo trigger (compat con Rummikub)
+  // En modo multi: usar triggers directamente
+  if (isTimerMode) {
+    const singleOpts = options as SingleTriggerOptions;
+    const word = singleOpts.triggerWord ?? DEFAULT_TRIGGER;
+    triggersRef.current = [{
+      word,
+      onDetected: () => {
+        singleOpts.onTrigger?.();
+        passTurn('voice');
+      },
+    }];
+  } else {
+    triggersRef.current = (options as MultiTriggerOptions).triggers;
+  }
+
   // BUG-04: incluir 'timeout' para que la voz siga activa cuando el tiempo se agota
-  const shouldListen = enabled && permissionRef.current === true
-    && (status === 'running' || status === 'timeout');
+  const shouldListen = isTimerMode
+    ? enabled && permissionRef.current === true && (status === 'running' || status === 'timeout')
+    : enabled && permissionRef.current === true;
 
   // BUG-22: ref sincronizada con shouldListen para usarla en closures de event handlers
-  // sin poner shouldListen en las deps del effect de suscripciones.
   const shouldListenRef = useRef(shouldListen);
   useEffect(() => { shouldListenRef.current = shouldListen; }, [shouldListen]);
 
-  // BUG-22: ref para saber si el cierre de sesión fue por error fatal.
-  // El handler de 'end' consulta esta ref para no reiniciar tras un error no-recuperable.
+  // BUG-22: ref para saber si el cierre de sesión fue por error fatal
   const fatalErrorRef = useRef(false);
 
-  // ── Iniciar / detener reconocimiento ──────────────────────────────────
+  // ── Iniciar / detener reconocimiento ──────────────────────────────
   const startListening = useCallback(() => {
     if (!SpeechModule || isRunningRef.current) return;
     try {
@@ -100,10 +181,7 @@ export function useVoiceDetection({
     setVoiceState('paused');
   }, []);
 
-  // ── Suscripción a eventos nativos ──────────────────────────────────────
-  // BUG-22: los handlers usan shouldListenRef.current en lugar de shouldListen
-  // para tener siempre el valor más reciente sin recrear los listeners en cada
-  // transición de turno. 'shouldListen' ya no está en las deps de este effect.
+  // ── Suscripción a eventos nativos ──────────────────────────────────
   useEffect(() => {
     if (!SpeechModule || !enabled) return;
 
@@ -147,11 +225,12 @@ export function useVoiceDetection({
         const event = data as { results: Array<{ transcript: string; isFinal?: boolean }> };
         const now = Date.now();
         if (now - lastTriggerRef.current < 800) return;
+
         for (const result of event.results) {
-          if (result.transcript.toLowerCase().trim().includes(triggerWord.toLowerCase())) {
+          const match = findBestMatch(result.transcript, triggersRef.current);
+          if (match) {
             lastTriggerRef.current = now;
-            onTrigger?.();
-            passTurn('voice');
+            match.onDetected();
             break;
           }
         }
@@ -160,9 +239,9 @@ export function useVoiceDetection({
 
     return () => subs.forEach((s) => s.remove());
   // BUG-22: 'shouldListen' eliminado de deps — los closures usan shouldListenRef.current
-  }, [enabled, triggerWord, startListening, passTurn, onTrigger]);
+  }, [enabled, startListening]);
 
-  // ── Control start/stop según estado del timer ──────────────────────────
+  // ── Control start/stop según estado ──────────────────────────────
   useEffect(() => {
     if (!SpeechModule || !enabled || permissionRef.current !== true) return;
 
@@ -180,10 +259,9 @@ export function useVoiceDetection({
     };
   }, [enabled, shouldListen, startListening, stopListening]);
 
-  // ── Gestión de permisos ────────────────────────────────────────────────
+  // ── Gestión de permisos ────────────────────────────────────────────
   const requestPermission = useCallback(async (): Promise<boolean> => {
     if (!SpeechModule) {
-      // En Expo Go no hay módulo — retornamos false silenciosamente
       permissionRef.current = false;
       return false;
     }
