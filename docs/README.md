@@ -6,45 +6,70 @@
 
 **Flujo principal:** Home → Configurar partida (tiempo, jugadores, nombres) → Temporizador en juego → Resumen de partida.
 
-**Pantalla clave — el temporizador:**
-- Ocupa toda la pantalla, diseño inmersivo
-- Una barra de progreso vertical que se vacía de arriba hacia abajo
-- El tiempo restante en tipografía gigante (≥80pt) centrada
-- Nombre del jugador actual + "Sigue: [próximo jugador]"
-- 3 botones grandes: Pausar / Reiniciar turno / Pasar turno
-- Estados de color: **azul/verde** (tiempo abundante) → **naranja** (≤20% restante, barra pulsa) → **flash rojo** (tiempo agotado)
-- Ícono de micrófono en esquina: verde (escuchando), gris (pausado)
-- Al vencer el tiempo: flash rojo + vibración + sonido, auto-reinicia el mismo jugador
-
 **Público:** 2 a 8 jugadores, rango etario amplio. Prioridad: claridad, botones grandes (≥48dp), nada escondido.
-
-## Producto
-
-| Documento | Descripción |
-|-----------|-------------|
-| [vision-producto.md](./producto/vision-producto.md) | Visión, objetivos y alcance del producto |
-| [especificacion-funcional.md](./producto/especificacion-funcional.md) | Requerimientos funcionales detallados |
-| [pantallas-wireframes.md](./producto/pantallas-wireframes.md) | Wireframes de todas las pantallas |
-| [flujos-usuario.md](./producto/flujos-usuario.md) | Flujos completos de usuario |
-
-## Desarrollo
-
-| Documento | Descripción |
-|-----------|-------------|
-| [arquitectura.md](./desarrollo/arquitectura.md) | Stack, estructura de carpetas y decisiones de diseño |
-| [plan-desarrollo.md](./desarrollo/plan-desarrollo.md) | Plan de desarrollo por fases con criterios de aceptación |
 
 ---
 
-## Estado del MVP
+## Estructura
 
-**Fase actual:** Setup del proyecto (Fase 1 de 5)
+```
+docs/
+├── plataforma/          ← infraestructura compartida por todos los juegos
+│   ├── vision-producto.md
+│   ├── arquitectura.md
+│   └── bugs/            ← bugs de hooks, stores y nav (compartidos)
+└── juegos/
+    └── rummikub/        ← primer juego implementado
+        ├── producto/    ← especificación, flujos, wireframes
+        └── desarrollo/  ← plan, backlog, informes de fases y sprints
+```
 
-### Módulos planificados (roadmap)
+---
 
-- [x] Temporizador por turno con voz — **MVP en progreso**
+## Plataforma
+
+| Documento | Descripción |
+|-----------|-------------|
+| [vision-producto.md](./plataforma/vision-producto.md) | Visión, objetivos y alcance de Board Buddy |
+| [arquitectura.md](./plataforma/arquitectura.md) | Stack, estructura de carpetas y decisiones de diseño |
+
+### Bugs resueltos
+
+| Bug | Título | Severidad |
+|-----|--------|-----------|
+| [BUG-15](./plataforma/bugs/BUG-15/) | Voz no detecta "paso" — requiresOnDeviceRecognition | Alta |
+| [BUG-16](./plataforma/bugs/BUG-16/) | Segundos corren más rápido de lo real | Alta |
+| [BUG-22](./plataforma/bugs/BUG-22/) | Flicker paused/listening constante | Alta |
+| [BUG-25](./plataforma/bugs/BUG-25/) | Barra de navegación Android con fondo negro | Media |
+
+---
+
+## Juegos
+
+### Rummikub
+
+| Documento | Descripción |
+|-----------|-------------|
+| [especificacion-funcional.md](./juegos/rummikub/producto/especificacion-funcional.md) | Requerimientos funcionales detallados |
+| [flujos-usuario.md](./juegos/rummikub/producto/flujos-usuario.md) | Flujos completos de usuario |
+| [pantallas-wireframes.md](./juegos/rummikub/producto/pantallas-wireframes.md) | Wireframes de todas las pantallas |
+| [plan-desarrollo.md](./juegos/rummikub/desarrollo/plan-desarrollo.md) | Plan de desarrollo por fases |
+| [backlog-v1.md](./juegos/rummikub/desarrollo/backlog-v1.md) | Backlog del MVP |
+
+#### Informes de desarrollo
+
+| Documento | Descripción |
+|-----------|-------------|
+| [informe-fase-1.md](./juegos/rummikub/desarrollo/informe-fase-1.md) | Setup del proyecto |
+| [informe-fase-2.md](./juegos/rummikub/desarrollo/informe-fase-2.md) | Lógica del temporizador |
+| [informe-fase-3.md](./juegos/rummikub/desarrollo/informe-fase-3.md) | Pantalla del temporizador |
+| [informe-fase-4.md](./juegos/rummikub/desarrollo/informe-fase-4.md) | Detección de voz |
+| [informe-fase-5.md](./juegos/rummikub/desarrollo/informe-fase-5.md) | Configuración y persistencia |
+
+---
+
+## Roadmap
+
+- [x] Rummikub — temporizador por turno con voz (MVP)
 - [ ] Marcador de puntos por jugador
-- [ ] Juego: Truco
-- [ ] Juego: Generala
-- [ ] Juego: Uno
-- [ ] Multijugador en red local
+- [ ] Nuevo juego (en definición)
