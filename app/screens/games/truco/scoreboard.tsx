@@ -1,10 +1,11 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Platform, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as NavigationBar from 'expo-navigation-bar';
 import { useTrucoStore } from '@src/store/trucoStore';
+import { useTrucoVoice } from '@src/hooks/useTrucoVoice';
 import { Colors, FontWeights, FontSizes, Spacing } from '@src/constants/tokens';
 import { VoiceStatusChip } from '@src/components/timer/VoiceStatusChip';
 import { ScorePanel } from '@src/components/truco/ScorePanel';
@@ -26,6 +27,23 @@ export default function ScoreboardScreen() {
 
   const { registerCanto, startHand, endHand, undoLastPoints } =
     useTrucoStore.getState();
+
+  // Voz
+  const [voiceReady, setVoiceReady] = useState(false);
+  const { state: voiceState, requestPermission } = useTrucoVoice({
+    enabled: voiceEnabled && voiceReady,
+    onPermissionDenied: () => {},
+  });
+
+  // Pedir permisos de voz al montar
+  useEffect(() => {
+    if (voiceEnabled) {
+      requestPermission().then((granted) => {
+        if (granted) setVoiceReady(true);
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceEnabled]);
 
   // Sincronizar nav bar de Android
   if (Platform.OS === 'android') {
@@ -137,7 +155,7 @@ export default function ScoreboardScreen() {
       {/* Header: voz + número de mano */}
       <View style={styles.header}>
         <VoiceStatusChip
-          state={voiceEnabled ? 'listening' : 'paused'}
+          state={voiceState === 'listening' ? 'listening' : 'paused'}
           voiceEnabled={voiceEnabled}
         />
         <Text style={styles.handLabel}>Mano {handNumber}</Text>
