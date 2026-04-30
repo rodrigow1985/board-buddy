@@ -133,20 +133,12 @@ export default function ScoreboardScreen() {
     );
   }, [router]);
 
-  if (gameStatus === 'finished') {
-    const winner = useTrucoStore.getState().winner;
-    const winnerName = winner !== null ? teams[winner].name : '?';
-    return (
-      <View style={[styles.container, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
-        <StatusBar style="light" />
-        <Text style={styles.winnerTitle}>Ganó</Text>
-        <Text style={styles.winnerName}>{winnerName}</Text>
-        <Text style={styles.finalScore}>
-          {teams[0].name} {teams[0].score} — {teams[1].score} {teams[1].name}
-        </Text>
-      </View>
-    );
-  }
+  // Navegar al resumen cuando termina la partida
+  useEffect(() => {
+    if (gameStatus === 'finished') {
+      router.replace('/games/truco/summary');
+    }
+  }, [gameStatus, router]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + Spacing.screenV }]}>
@@ -228,22 +220,5 @@ const styles = StyleSheet.create({
   cantoSection: {
     minHeight: 140,
     justifyContent: 'center',
-  },
-  winnerTitle: {
-    fontFamily: FontWeights.sans.regular,
-    fontSize: FontSizes.displayM,
-    color: 'rgba(255,255,255,0.6)',
-  },
-  winnerName: {
-    fontFamily: FontWeights.display.semibold,
-    fontSize: 56,
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
-  finalScore: {
-    fontFamily: FontWeights.sans.medium,
-    fontSize: FontSizes.body,
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: Spacing.lg,
   },
 });
