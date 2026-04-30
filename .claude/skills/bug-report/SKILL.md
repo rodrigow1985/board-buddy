@@ -20,7 +20,7 @@ Invocar `/bug-report` cuando el usuario describe algo que falla, se comporta dis
    mcp__github__list_issues (owner: rodrigow1985, repo: board-buddy, state: all)
    ```
 2. El ID del bug será el número del issue que se va a crear (no inventarlo antes).
-3. Revisar si ya existe una carpeta en `docs/desarrollo/bugs/` para no duplicar.
+3. Revisar si ya existe una carpeta en `docs/plataforma/bugs/` para no duplicar.
 
 ---
 
@@ -68,10 +68,10 @@ Labels sugeridos: `bug` + severidad (`prioridad-alta` / `prioridad-media` / `pri
 
 ## Paso 4 — Crear la carpeta del bug
 
-Estructura en `docs/desarrollo/bugs/BUG-{número}/`:
+Estructura en `docs/plataforma/bugs/BUG-{número}/`:
 
 ```
-docs/desarrollo/bugs/
+docs/plataforma/bugs/
 └── BUG-{número}/
     ├── reporte.md        ← se crea ahora
     └── informe.md        ← se crea al cierre
@@ -176,7 +176,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 
 ## Paso 8 — Crear el informe de cierre
 
-Crear `docs/desarrollo/bugs/BUG-{número}/informe.md`:
+Crear `docs/plataforma/bugs/BUG-{número}/informe.md`:
 
 ```markdown
 # Informe BUG-{número} — {título}
@@ -230,7 +230,7 @@ Actualizar `reporte.md` → Estado: **Cerrado ✓**
 
 ## Paso 10 — Subir docs a main
 
-Subir `docs/desarrollo/bugs/BUG-{número}/` al branch `main` vía MCP (sin código):
+Subir `docs/plataforma/bugs/BUG-{número}/` al branch `main` vía MCP (sin código):
 ```
 mcp__github__create_or_update_file (branch: main)
 ```
