@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -48,8 +48,17 @@ export default function TrucoSetupScreen() {
   } = useTrucoSetupStore();
 
   const { initGame } = useTrucoStore();
+  const gameStatus = useTrucoStore((s) => s.gameStatus);
+  const hydrated = useTrucoStore((s) => s.hydrated);
+
+  const hasSavedGame = hydrated && gameStatus === 'playing';
 
   const [editingField, setEditingField] = useState<'team1' | 'team2' | null>(null);
+
+  // Hidratar estado guardado al montar
+  useEffect(() => {
+    useTrucoStore.getState().hydrate();
+  }, []);
 
   const handleStartGame = () => {
     initGame({
@@ -161,13 +170,23 @@ export default function TrucoSetupScreen() {
 
       {/* CTA fijo */}
       <View style={[styles.ctaWrap, { paddingBottom: insets.bottom + Spacing.screenV }]}>
+        {hasSavedGame && (
+          <Pressable
+            style={({ pressed }) => [styles.cta, styles.ctaResume, pressed && styles.ctaPressed]}
+            onPress={() => router.replace('/games/truco/scoreboard')}
+            accessibilityLabel="Continuar partida"
+          >
+            <Ionicons name="play-forward" size={18} color="#FFFFFF" />
+            <Text style={styles.ctaLabel}>Continuar partida</Text>
+          </Pressable>
+        )}
         <Pressable
           style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
           onPress={handleStartGame}
           accessibilityLabel="Iniciar partida"
         >
           <Ionicons name="play" size={18} color="#FFFFFF" />
-          <Text style={styles.ctaLabel}>Iniciar partida</Text>
+          <Text style={styles.ctaLabel}>{hasSavedGame ? 'Nueva partida' : 'Iniciar partida'}</Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>
@@ -359,7 +378,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Spacing.sm,
   },
-  ctaPressed: { backgroundColor: Colors.alert },
+  ctaResume: {
+    backgroundColor: Colors.calm,
+    marginBottom: Spacing.sm,
+  },
+  ctaPressed: { opacity: 0.8 },
   ctaLabel: {
     fontFamily: FontWeights.sans.semibold,
     fontSize: FontSizes.body,

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   EnvidoLevel,
   TrucoLevel,
@@ -78,6 +79,9 @@ interface TrucoState {
   // Historial
   history: HandHistoryEntry[];
 
+  // Persistencia
+  hydrated: boolean;
+
   // Acciones
   initGame: (config: TrucoConfig) => void;
   startHand: () => void;
@@ -90,6 +94,8 @@ interface TrucoState {
   addManualPoints: (team: 0 | 1, amount: number, reason: string) => void;
   undoLastPoints: () => void;
   resetGame: () => void;
+  hydrate: () => Promise<void>;
+  persist: () => Promise<void>;
 }
 
 export interface TrucoConfig {
@@ -112,7 +118,9 @@ const INITIAL_HAND: TrucoHand = {
   accumulatedPoints: [],
 };
 
-const INITIAL_STATE: Omit<TrucoState, keyof ReturnType<typeof createActions>> = {
+const STORAGE_KEY = '@truco_game';
+
+const INITIAL_STATE: Omit<TrucoState, keyof ReturnType<typeof createActions> | 'hydrate' | 'persist'> = {
   teams: [
     { name: 'Nosotros', score: 0 },
     { name: 'Ellos', score: 0 },
@@ -125,6 +133,7 @@ const INITIAL_STATE: Omit<TrucoState, keyof ReturnType<typeof createActions>> = 
   handNumber: 0,
   winner: null,
   history: [],
+  hydrated: false,
 };
 
 // ─── Helpers internos ─────────────────────────────────────────────
@@ -174,9 +183,46 @@ function addScoreToTeam(
 
 // ─── Acciones ─────────────────────────────────────────────────────
 
-function createActions(set: (fn: (s: TrucoState) => Partial<TrucoState>) => void) {
+function createActions(
+  set: (fn: (s: TrucoState) => Partial<TrucoState>) => void,
+  get: () => TrucoState,
+) {
+  const persist = async () => {
+    const { hydrated, hydrate: _h, persist: _p, ...data } = get();
+    // Excluir acciones (funciones) antes de serializar
+    const serializable: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (typeof v !== 'function') serializable[k] = v;
+    }
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
+  };
+
+  const setAndPersist = (fn: (s: TrucoState) => Partial<TrucoState>) => {
+    set(fn);
+    persist();
+  };
+
   return {
-    initGame: (config: TrucoConfig) =>
+    persist,
+
+    hydrate: async () => {
+      try {
+        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const data = JSON.parse(raw);
+          // Solo restaurar si hay una partida en curso
+          if (data.gameStatus === 'playing') {
+            set(() => ({ ...data, hydrated: true }));
+            return;
+          }
+        }
+      } catch {
+        // Si falla la lectura, usar estado por defecto
+      }
+      set(() => ({ hydrated: true }));
+    },
+
+    initGame: (config: TrucoConfig) => {
       set(() => ({
         ...INITIAL_STATE,
         teams: [
@@ -189,10 +235,13 @@ function createActions(set: (fn: (s: TrucoState) => Partial<TrucoState>) => void
         gameStatus: 'playing',
         currentHand: { ...INITIAL_HAND, status: 'playing' },
         handNumber: 1,
-      } as Partial<TrucoState>)),
+        hydrated: true,
+      } as Partial<TrucoState>));
+      persist();
+    },
 
     startHand: () =>
-      set((s) => {
+      setAndPersist((s) => {
         if (s.gameStatus !== 'playing') return {};
         return {
           currentHand: { ...INITIAL_HAND, status: 'playing' },
@@ -201,7 +250,7 @@ function createActions(set: (fn: (s: TrucoState) => Partial<TrucoState>) => void
       }),
 
     endHand: () =>
-      set((s) => {
+      setAndPersist((s) => {
         if (s.currentHand.status === 'idle') return {};
 
         const entry: HandHistoryEntry = {
@@ -209,9 +258,6 @@ function createActions(set: (fn: (s: TrucoState) => Partial<TrucoState>) => void
           points: s.currentHand.accumulatedPoints,
         };
 
-        // Si no hubo cantos de truco, la mano base vale 1 punto.
-        // Pero esos puntos se asignan cuando el jugador confirma quién ganó la mano,
-        // no automáticamente aquí. Solo cerramos la mano.
         return {
           currentHand: { ...INITIAL_HAND },
           history: [...s.history, entry],
@@ -219,7 +265,7 @@ function createActions(set: (fn: (s: TrucoState) => Partial<TrucoState>) => void
       }),
 
     registerCanto: (type: CantoType, level: string, calledBy: 0 | 1) =>
-      set((s) => {
+      setAndPersist((s) => {
         const hand = s.currentHand;
         if (hand.status !== 'playing' && hand.status !== 'canto_pending') return {};
 
@@ -279,7 +325,7 @@ function createActions(set: (fn: (s: TrucoState) => Partial<TrucoState>) => void
       }),
 
     respondCanto: (response: 'accepted' | 'rejected') =>
-      set((s) => {
+      setAndPersist((s) => {
         const hand = s.currentHand;
         if (hand.status !== 'canto_pending' || !hand.activeCanto) return {};
 
@@ -349,7 +395,7 @@ function createActions(set: (fn: (s: TrucoState) => Partial<TrucoState>) => void
       }),
 
     assignWinner: (team: 0 | 1) =>
-      set((s) => {
+      setAndPersist((s) => {
         const hand = s.currentHand;
         if (hand.status !== 'resolving' || !hand.activeCanto) return {};
 
@@ -370,7 +416,7 @@ function createActions(set: (fn: (s: TrucoState) => Partial<TrucoState>) => void
       }),
 
     confirmPoints: () =>
-      set((s) => {
+      setAndPersist((s) => {
         const hand = s.currentHand;
         if (hand.status !== 'confirming' || !hand.pendingPoints) return {};
 
@@ -395,7 +441,7 @@ function createActions(set: (fn: (s: TrucoState) => Partial<TrucoState>) => void
       }),
 
     cancelPoints: () =>
-      set((s) => {
+      setAndPersist((s) => {
         const hand = s.currentHand;
         if (hand.status !== 'confirming' && hand.status !== 'resolving') return {};
 
@@ -417,7 +463,7 @@ function createActions(set: (fn: (s: TrucoState) => Partial<TrucoState>) => void
       }),
 
     addManualPoints: (team: 0 | 1, amount: number, reason: string) =>
-      set((s) => {
+      setAndPersist((s) => {
         if (s.gameStatus !== 'playing') return {};
 
         const teams = addScoreToTeam(s.teams, team, amount, s.targetScore);
@@ -437,7 +483,7 @@ function createActions(set: (fn: (s: TrucoState) => Partial<TrucoState>) => void
       }),
 
     undoLastPoints: () =>
-      set((s) => {
+      setAndPersist((s) => {
         if (s.gameStatus !== 'playing') return {};
 
         const accumulated = s.currentHand.accumulatedPoints;
@@ -459,13 +505,19 @@ function createActions(set: (fn: (s: TrucoState) => Partial<TrucoState>) => void
         };
       }),
 
-    resetGame: () => set(() => ({ ...INITIAL_STATE } as Partial<TrucoState>)),
+    resetGame: () => {
+      set(() => ({ ...INITIAL_STATE, hydrated: true } as Partial<TrucoState>));
+      AsyncStorage.removeItem(STORAGE_KEY);
+    },
   };
 }
 
 // ─── Store ────────────────────────────────────────────────────────
 
-export const useTrucoStore = create<TrucoState>((set) => ({
+export const useTrucoStore = create<TrucoState>((set, get) => ({
   ...(INITIAL_STATE as TrucoState),
-  ...createActions(set as (fn: (s: TrucoState) => Partial<TrucoState>) => void),
+  ...createActions(
+    set as (fn: (s: TrucoState) => Partial<TrucoState>) => void,
+    get,
+  ),
 }));
