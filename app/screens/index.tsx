@@ -101,11 +101,11 @@ export default function HomeScreen() {
         />
 
         <GameCard
-          title="Próximamente"
-          subtitle="Más juegos en camino"
-          icon="add-circle-outline"
-          active={false}
-          onPress={() => {}}
+          title="Truco"
+          subtitle="Marcador con reconocimiento de voz"
+          icon="card-outline"
+          active
+          onPress={() => router.push('/games/truco/setup')}
         />
 
         {/* Footer stats */}
