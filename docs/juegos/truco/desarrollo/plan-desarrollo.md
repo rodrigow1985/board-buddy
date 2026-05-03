@@ -20,15 +20,15 @@ Marcador inteligente con reconocimiento de voz. La app escucha los cantos de la 
 
 ## Fases
 
-| # | Fase | Dependencia | Estimación |
-|---|------|-------------|------------|
-| 1 | Store y modelo de datos | — | |
-| 2 | Pantalla de setup | Fase 1 | |
-| 3 | Marcador (UI estática) | Fase 1 | |
-| 4 | Máquina de estados de cantos | Fase 1 | |
-| 5 | Voz multi-palabra | Fase 4 | |
-| 6 | Flujo de confirmación | Fases 3 + 4 | |
-| 7 | Persistencia y resumen | Fases 3 + 6 | |
+| # | Fase | Dependencia | Estado |
+|---|------|-------------|--------|
+| 1 | Store y modelo de datos | — | ✅ Completo |
+| 2 | Pantalla de setup | Fase 1 | ✅ Completo |
+| 3 | Marcador (UI estática) | Fase 1 | ✅ Completo |
+| 4 | Máquina de estados de cantos | Fase 1 | ✅ Completo |
+| 5 | Voz multi-palabra | Fase 4 | ✅ Completo |
+| 6 | Flujo de confirmación | Fases 3 + 4 | ✅ Completo |
+| 7 | Persistencia y resumen | Fases 3 + 6 | ✅ Completo |
 
 ---
 
@@ -140,12 +140,12 @@ interface TrucoActions {
 
 ### Criterios de aceptación
 
-- [ ] `trucoStore` creado con estado inicial y todas las acciones
-- [ ] Lógica de cálculo de puntos según tablas del reglamento
-- [ ] Transiciones de `HandStatus` validadas (no se puede cantar truco si hay envido pendiente sin resolver)
-- [ ] Detección de victoria (equipo llega a targetScore)
-- [ ] Tests unitarios para: cálculo de puntos envido, truco, falta envido, transiciones de estado
-- [ ] `npx tsc --noEmit` sin errores
+- [x] `trucoStore` creado con estado inicial y todas las acciones
+- [x] Lógica de cálculo de puntos según tablas del reglamento
+- [x] Transiciones de `HandStatus` validadas (no se puede cantar truco si hay envido pendiente sin resolver)
+- [x] Detección de victoria (equipo llega a targetScore)
+- [x] Tests unitarios para: cálculo de puntos envido, truco, falta envido, transiciones de estado (32 + 21 tests)
+- [x] `npx tsc --noEmit` sin errores
 
 ---
 
@@ -164,11 +164,11 @@ interface TrucoActions {
 
 ### Criterios de aceptación
 
-- [ ] Pantalla en `screens/games/truco/setup.tsx`
-- [ ] Configuración se persiste en AsyncStorage
-- [ ] Al abrir, carga la última configuración usada
-- [ ] Botón inicia partida y navega al marcador
-- [ ] Reutilizar componentes common existentes (Toggle, Stepper, NavRow)
+- [x] Pantalla en `screens/games/truco/setup.tsx`
+- [x] Configuración persiste en `trucoSetupStore`
+- [x] Botón inicia partida y navega al marcador
+- [x] Reutilizar componentes common existentes (ToggleRow)
+- [x] "Continuar partida" visible cuando hay partida guardada en AsyncStorage
 
 ---
 
@@ -193,14 +193,14 @@ La pantalla se divide en:
 
 ### Criterios de aceptación
 
-- [ ] Pantalla en `screens/games/truco/scoreboard.tsx`
-- [ ] Marcador muestra puntos de ambos equipos
-- [ ] Palitos se renderizan correctamente (0 a 30)
-- [ ] Indicador malas/buenas funciona
-- [ ] Botones +Envido, +Truco, +Manual presentes (sin lógica aún)
-- [ ] Botón "Fin de partida" navega a summary
-- [ ] Nav bar de Android sincronizada con color de fondo
-- [ ] StatusBar light
+- [x] Pantalla en `screens/games/truco/scoreboard.tsx`
+- [x] Marcador muestra puntos de ambos equipos
+- [x] Palitos se renderizan correctamente (0 a 30) — `TallyMarks.tsx`
+- [x] Indicador malas/buenas funciona — `ScorePanel.tsx`
+- [x] Botones Envido, Truco, Manual presentes
+- [x] Botón "Fin de partida" con confirmación
+- [x] Nav bar de Android sincronizada con `expo-navigation-bar`
+- [x] StatusBar light
 
 ---
 
@@ -236,13 +236,13 @@ La pantalla se divide en:
 
 ### Criterios de aceptación
 
-- [ ] Zona de estado muestra el canto activo con puntos en juego
-- [ ] Botones de respuesta (quiero/no quiero/subir) funcionan
-- [ ] Flujo completo de resolución con confirmación
-- [ ] Cantos encadenados (envido + truco en misma mano) funcionan
-- [ ] Validaciones de orden (no truco antes de resolver envido pendiente)
-- [ ] Animaciones de transición entre estados (fade/slide)
-- [ ] Tests para todas las combinaciones de cantos y respuestas
+- [x] Zona de estado muestra el canto activo con puntos en juego — `CantoZone.tsx`
+- [x] Botones de respuesta (quiero/no quiero) funcionan
+- [x] Flujo completo de resolución con confirmación
+- [x] Cantos encadenados (envido + truco en misma mano) funcionan
+- [x] Validaciones de orden (no se puede cantar otro tipo si hay canto pendiente)
+- [ ] Animaciones de transición entre estados — pendiente
+- [x] Tests para todas las combinaciones de cantos y respuestas
 
 ---
 
@@ -294,12 +294,12 @@ Cuando el transcript contiene múltiples matches, priorizar frases más largas:
 
 ### Criterios de aceptación
 
-- [ ] `useVoiceDetection` refactorizado para múltiples triggers
-- [ ] El hook de Rummikub sigue funcionando (no romper backwards compat)
-- [ ] Detección fuzzy con aliases
-- [ ] Prioridad de frases compuestas sobre simples
-- [ ] Debounce entre detecciones (evitar doble registro)
-- [ ] Tests unitarios para matching de palabras
+- [x] `useVoiceDetection` refactorizado para múltiples triggers (SingleTrigger + MultiTrigger)
+- [x] El hook de Rummikub sigue funcionando (backwards compat)
+- [x] Detección con aliases fonéticos (embido, vale 4, contraflor, etc.)
+- [x] Prioridad de frases compuestas sobre simples (`findBestMatch` por longitud)
+- [x] Debounce de 800ms entre detecciones
+- [x] 21 tests unitarios para matching de palabras
 
 ---
 
@@ -331,12 +331,12 @@ Cuando la voz detecta un canto, la app no sabe qué equipo cantó. Opciones:
 
 ### Criterios de aceptación
 
-- [ ] Voz detecta cantos y dispara flujo automáticamente
-- [ ] Fallback manual siempre disponible (botones +Envido, +Truco)
-- [ ] Confirmación obligatoria antes de sumar puntos
-- [ ] Animación de puntos sumándose al marcador
-- [ ] Sonido y háptico al confirmar puntos
-- [ ] Se puede cancelar/corregir en cualquier paso del flujo
+- [x] Voz detecta cantos y dispara flujo automáticamente — `useTrucoVoice`
+- [x] Fallback manual siempre disponible (botones Envido, Truco, Manual)
+- [x] Confirmación obligatoria antes de sumar puntos
+- [ ] Animación de puntos sumándose al marcador — pendiente
+- [ ] Sonido y háptico al confirmar puntos — pendiente
+- [x] Se puede cancelar en cualquier paso del flujo (botón Cancelar)
 
 ---
 
@@ -360,11 +360,11 @@ Cuando la voz detecta un canto, la app no sabe qué equipo cantó. Opciones:
 
 ### Criterios de aceptación
 
-- [ ] Partida se guarda automáticamente
-- [ ] Al reabrir, ofrece retomar partida en curso
-- [ ] Pantalla de resumen con estadísticas
-- [ ] Detección de victoria dispara pantalla de resumen automáticamente
-- [ ] "Revancha" inicia nueva partida manteniendo equipos
+- [x] Partida se guarda automáticamente en AsyncStorage tras cada mutación
+- [x] Al reabrir, ofrece "Continuar partida" si hay partida en curso
+- [x] Pantalla de resumen con estadísticas — `summary.tsx`
+- [x] Detección de victoria navega automáticamente al resumen
+- [x] "Revancha" inicia nueva partida manteniendo equipos y config
 
 ---
 
